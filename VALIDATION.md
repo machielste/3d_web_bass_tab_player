@@ -161,3 +161,24 @@ requires full chart/audio preparation. General ToneLib compatibility retains
 the earlier importer limits; its catalog duration comes from score timing.
 Album art is read from Rocksmith archives when available. Generated previews,
 art and full-song audio have soft cache budgets, protecting recently used assets.
+
+## Full-height play screen
+
+The play screen now uses a 208-pixel sidebar for navigation, song title, tuning,
+transport and volume. The library retains its existing layout. The player header,
+footer and decorative copy no longer take height from the highway. Source details
+and the single-file picker are under More. Restart preserves the playing/paused
+state; fullscreen is available through its button or F. The renderer, camera,
+note geometry and audio-driven timing are unchanged.
+
+The integrated screen was checked at 1280 × 720 (1072 × 720 highway) and
+1920 × 1080 (1712 × 1080 highway). In a 430 × 900 portrait window the controls
+move below the highway, with no horizontal overflow and accessible playback,
+volume and fullscreen controls. Temporary viewport overrides were reset.
+
+Browser checks covered Rocksmith and five-string ToneLib playback, seeking,
+restart, volume, Space playback, fullscreen entry/exit by button and F, opening
+Sleep On It through More → Open song, and returning to the library and player.
+The sidebar correctly displayed EADG and BEADG. No browser console errors or
+warnings were observed. Seventeen Python checks and thirteen JavaScript checks
+pass; JavaScript syntax and Git whitespace checks also pass.

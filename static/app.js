@@ -9,16 +9,22 @@ audio.volume = Number($('volume').value);
 function message(text = '', error = false) {
   $('message').textContent = text;
   $('message').classList.toggle('error', error);
+  $('message').hidden = !text;
 }
 
 function setView(player) {
   $('library').hidden = player; $('playback').hidden = !player;
+  document.body.classList.toggle('playing-view', player);
+  $('player-more').open = false;
   $('show-library').classList.toggle('active', !player);
   $('show-player').classList.toggle('active', player);
   library?.setVisible(!player);
   if (!player) { audio.pause(); history.replaceState({}, '', '/'); }
   else {
-    if (chart) history.replaceState({}, '', `?song=${chart.id}`);
+    if (chart) {
+      history.replaceState({}, '', `?song=${chart.id}`);
+      document.title = `${chart.title} — Tab Player`;
+    }
     highway?.resize();
   }
 }
@@ -42,7 +48,9 @@ function updateState() {
   $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
   $('play').disabled = !chart || loading;
   $('seek').disabled = !chart || loading;
+  $('restart').disabled = !chart || loading;
   $('open').disabled = loading;
+  $('player-open').disabled = loading;
   $('show-player').hidden = !chart && !loading;
 }
 
@@ -62,8 +70,9 @@ async function showSong(song, autoplay = true) {
   chart = song;
   $('empty').hidden = true;
   $('title').textContent = chart.title;
-  $('eyebrow').textContent = `${chart.format} / ${chart.arrangement}`.toUpperCase();
-  $('subtitle').textContent = [chart.artist, `${chart.strings.length}-string ${chart.strings.join(' · ')}`].filter(Boolean).join('  /  ');
+  $('eyebrow').textContent = 'BASS';
+  $('subtitle').textContent = chart.artist || '';
+  $('song-source').textContent = `${chart.format} · ${chart.strings.length}-string bass`;
   $('legend').replaceChildren(...chart.strings.map((name, i) => {
     const element = document.createElement('span');
     const dot = document.createElement('i'); dot.style.setProperty('--string', highway.colors[i]);
@@ -93,13 +102,14 @@ library = new SongLibrary(async song => {
   } finally { if (id === request) { loading = false; updateState(); } }
 });
 
-$('show-library').addEventListener('click', () => {
+function showLibrary() {
   ++request; loading = false; message(); setView(false); updateState();
   document.title = 'Song Library — Tab Player';
-});
+}
+for (const id of ['show-library', 'player-library']) $(id).addEventListener('click', showLibrary);
 $('show-player').addEventListener('click', () => setView(true));
 
-$('open').addEventListener('click', () => $('file').click());
+for (const id of ['open', 'player-open']) $(id).addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', async () => {
   const file = $('file').files[0];
   if (!file) return;
@@ -121,7 +131,29 @@ $('file').addEventListener('change', async () => {
   }
 });
 $('play').addEventListener('click', () => audio.paused ? play() : audio.pause());
-$('volume').addEventListener('input', () => { audio.volume = Number($('volume').value); library.audio.volume = audio.volume * .6; });
+$('restart').addEventListener('click', () => {
+  audio.currentTime = 0;
+  $('seek').value = '0'; $('elapsed').textContent = formatTime(0);
+  highway?.render(0); updateState();
+});
+$('volume').addEventListener('input', () => {
+  audio.volume = Number($('volume').value); library.audio.volume = audio.volume * .6;
+  $('volume-level').textContent = `${Math.round(audio.volume * 100)}%`;
+});
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch {
+    message('Fullscreen could not start. You can also use your browser’s fullscreen command.', true);
+  }
+}
+$('fullscreen').hidden = !document.fullscreenEnabled;
+$('fullscreen').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  $('fullscreen-label').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+  highway?.resize();
+});
 $('seek').addEventListener('input', () => {
   seeking = true;
   audio.currentTime = Number($('seek').value);
@@ -137,8 +169,13 @@ audio.addEventListener('loadedmetadata', () => {
 });
 audio.addEventListener('error', () => message('The backing audio could not be played. Try another song.', true));
 document.addEventListener('keydown', event => {
-  if (event.code === 'Space' && !$('playback').hidden && !['INPUT', 'BUTTON', 'SELECT'].includes(document.activeElement.tagName) && chart && !loading) {
-    event.preventDefault(); audio.paused ? play() : audio.pause();
+  if ($('playback').hidden || document.querySelector('dialog[open]') ||
+      event.target.closest('input, select, textarea, [contenteditable]')) return;
+  if (event.code === 'Space' && chart && !loading && !event.target.closest('button, a, summary')) {
+    event.preventDefault();
+    if (!event.repeat) audio.paused ? play() : audio.pause();
+  } else if (event.key.toLowerCase() === 'f' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.repeat && document.fullscreenEnabled) {
+    event.preventDefault(); toggleFullscreen();
   }
 });
 document.addEventListener('visibilitychange', () => {

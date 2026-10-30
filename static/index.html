@@ -34,22 +34,24 @@
       </div><p id="library-message" role="status" aria-live="polite"></p>
     </section>
     <div id="playback" class="playback" hidden>
-    <section class="song-info" aria-label="Current song">
-      <div><p id="eyebrow" class="eyebrow">YOUR SONG. YOUR PACE.</p><h1 id="title">Pick a song. Play along.</h1><p id="subtitle">Open a ToneLib or Rocksmith file to begin.</p></div>
-      <span id="state" class="state">Ready</span>
-    </section>
     <section id="stage" aria-label="3D bass note highway">
-      <div id="empty" class="empty"><span class="empty-line"></span><p>Your next bassline starts here.</p><span>.song <span class="dot">/</span> .psarc</span></div>
-      <div id="legend" class="legend" aria-label="Strings, lowest to highest"></div>
-      <div class="stage-label">PLAY LINE <span aria-hidden="true">↓</span></div>
+      <div id="empty" class="empty"><span class="empty-line"></span><p>Open a song to begin.</p></div>
     </section>
-    <p id="message" role="status" aria-live="polite"></p>
-    <footer>
-      <button id="play" class="play-button" type="button" disabled aria-label="Play"><span id="play-icon" aria-hidden="true">▶</span></button>
-      <div class="timeline-wrap"><div class="timeline-labels"><output id="elapsed">0:00</output><output id="duration">0:00</output></div><input id="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Song position" disabled></div>
-      <label class="volume">Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Volume"></label>
-    </footer>
-    <div class="footnote"><span>Made for playing.</span><span>Space <span class="key-description">play / pause</span></span></div>
+    <aside class="playback-sidebar" aria-label="Playback controls">
+      <nav class="playback-navigation" aria-label="Playback navigation"><button id="player-library" class="text-button" type="button">← Library</button></nav>
+      <section class="playback-song" aria-label="Current song"><p id="eyebrow" class="eyebrow">BASS</p><h1 id="title">Open a song</h1><p id="subtitle"></p></section>
+      <div id="legend" class="legend" aria-label="Tuning, lowest to highest"></div>
+      <div class="playback-transport">
+        <div class="playback-buttons"><button id="restart" type="button" disabled aria-label="Restart song" title="Restart song"><span aria-hidden="true">↶</span></button><button id="play" class="play-button" type="button" disabled aria-label="Play" aria-keyshortcuts="Space"><span id="play-icon" aria-hidden="true">▶</span></button><span id="state" class="state" role="status">Ready</span></div>
+        <div class="timeline-labels"><output id="elapsed">0:00</output><span aria-hidden="true">/</span><output id="duration">0:00</output></div><input id="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Song position" disabled>
+      </div>
+      <p id="message" role="status" aria-live="polite" hidden></p>
+      <div class="playback-utility">
+        <label class="volume"><span>Volume</span><output id="volume-level" for="volume">70%</output><input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Volume"></label>
+        <button id="fullscreen" type="button" aria-keyshortcuts="F"><span aria-hidden="true">⛶</span><span id="fullscreen-label">Fullscreen</span><kbd aria-hidden="true">F</kbd></button>
+        <details id="player-more" class="player-more"><summary>More <span aria-hidden="true">···</span></summary><div><button id="player-open" class="text-button" type="button">Open song…</button><p id="song-source"></p><p><kbd>Space</kbd> Play / pause</p></div></details>
+      </div>
+    </aside>
     </div>
   </main>
   <dialog id="folder-dialog" aria-labelledby="folders-title"><div class="dialog-heading"><div><p class="eyebrow">YOUR LOCAL COLLECTION</p><h2 id="folders-title">Song folders</h2></div><button id="close-folders" class="text-button" type="button" aria-label="Close song folders">✕</button></div><p class="muted">Add folders containing .psarc or .song files. Subfolders are included.</p><ul id="folder-list"></ul><p id="no-folders" class="muted">No folders added yet.</p><form id="folder-form"><label for="folder-path">Folder path</label><div class="folder-input"><input id="folder-path" placeholder="C:\Music\Rocksmith DLC" required><button id="browse-folder" class="secondary-button" type="button">Browse…</button></div><button id="add-folder" class="open-button" type="submit">Add folder</button></form><p id="folder-message" role="status"></p><div class="dialog-bottom"><span class="muted">Folders are checked at startup and every 5 minutes.</span><button id="rescan" class="text-button" type="button">Rescan now ↻</button></div><details id="skipped-files" hidden><summary id="skipped-summary"></summary><ul id="skipped-list"></ul></details></dialog>

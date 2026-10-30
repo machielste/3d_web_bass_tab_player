@@ -27,9 +27,13 @@ checkbox turns automatic previews off. Press Enter, double-click a row, or use
 **Play song** to open its chart. **Library** returns to browsing and pauses the
 song. **Open song** still opens a single file using the Windows file picker.
 
-Play/pause: the circular button or Space. Drag the timeline to seek. All playback
-is at the original speed. If a browser blocks automatic audio, press Play once.
-Use a recent Chromium browser with WebGL 2 support.
+The play screen gives the highway the full window height, with song information,
+tuning and controls in a narrow left sidebar. In narrow portrait windows the
+controls move below the highway. **More → Open song…** opens another file.
+Play/pause: the circular button or Space. Drag the timeline to seek; the curved
+arrow restarts the song. **Fullscreen** or F toggles fullscreen, and Escape exits.
+All playback is at the original speed. If a browser blocks automatic audio,
+press Play once. Use a recent Chromium browser with WebGL 2 support.
 
 For development:
 
