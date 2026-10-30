@@ -1,0 +1,49 @@
+:root { color-scheme: dark; font-family: "Segoe UI", system-ui, sans-serif; color: #e9edf4; background: #0b1018; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid #69dacc; outline-offset: 5px; }
+button:disabled { cursor: default; opacity: .35; }
+.player { width: min(1600px, 100%); height: 100dvh; min-height: 640px; margin: auto; display: flex; flex-direction: column; padding: 0 40px; }
+header { min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #202934; }
+.brand { display: flex; align-items: center; gap: 12px; font-weight: 650; font-size: 13px; letter-spacing: 2px; white-space: nowrap; }
+.brand-mark { color: #74decd; font-size: 33px; line-height: 1; transform: rotate(90deg); }
+.prototype { margin-left: 16px; color: #75818f; font-size: 10px; letter-spacing: 1.5px; font-weight: 500; }
+.open-button { background: #d3f7ef; color: #112a2b; padding: 11px 18px; border: none; border-radius: 6px; font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 9px; }
+.open-button:hover { background: #e6fff9; }
+.open-button > span { font-size: 21px; font-weight: 400; }
+.song-info { display: flex; justify-content: space-between; align-items: center; padding: 28px 0 18px; gap: 20px; }
+.eyebrow { font-size: 10px; color: #7d9d9b; letter-spacing: 2px; margin: 0 0 9px; font-weight: 600; }
+h1 { font-size: clamp(20px, 2.8vw, 32px); font-weight: 550; line-height: 1.25; margin: 0 0 8px; letter-spacing: -.6px; overflow-wrap: anywhere; }
+#subtitle { color: #8f9ba9; font-size: 13px; margin: 0; }
+.state { color: #9eafa9; border: 1px solid #2b3c3a; border-radius: 20px; padding: 6px 11px; font-size: 11px; white-space: nowrap; }
+.state.playing { color: #91e5cc; background: #132921; border-color: #294d3d; }
+.state.loading { color: #e1d7a3; }
+#stage { position: relative; flex: 1; min-height: 240px; overflow: hidden; background: radial-gradient(ellipse at 50% 70%, #12202b 0%, #0b1018 68%); }
+#stage canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.empty { position: absolute; z-index: 1; top: 22%; left: 50%; transform: translateX(-50%); text-align: center; width: 90%; pointer-events: none; }
+.empty-line { display: block; width: 24px; height: 2px; margin: 0 auto 18px; background: #6fc7ba; }
+.empty p { color: #9babb8; font-size: 14px; margin: 0 0 10px; }
+.empty > span:last-child { color: #647887; font-size: 11px; letter-spacing: 1px; }
+.dot { padding: 0 10px; color: #374952; }
+.legend { position: absolute; z-index: 1; bottom: 17px; left: 0; display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: #b7c3cd; }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--string); }
+.stage-label { position: absolute; bottom: 17px; right: 0; font-size: 9px; letter-spacing: 1.8px; color: #6a7d8e; }
+.stage-label span { color: #9eb9bc; padding-left: 8px; }
+#message { font-size: 12px; min-height: 20px; margin: 0; color: #aebcc8; }
+#message.error { color: #ffaaa7; }
+footer { display: flex; gap: 22px; align-items: center; min-height: 82px; border-top: 1px solid #202934; }
+.play-button { display: grid; place-items: center; height: 42px; width: 42px; flex-shrink: 0; background: #d3f7ef; color: #142927; border: none; border-radius: 50%; }
+#play-icon { font-size: 14px; }
+.timeline-wrap { flex: 1; min-width: 0; }
+.timeline-labels { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; font-size: 11px; color: #a0afbd; padding-bottom: 5px; }
+input[type="range"] { accent-color: #9cdece; width: 100%; height: 16px; margin: 0; cursor: pointer; }
+input:disabled { cursor: default; opacity: .3; }
+.volume { display: flex; align-items: center; gap: 13px; color: #92a3b1; font-size: 11px; }
+.volume input { width: 86px; }
+.footnote { display: flex; justify-content: space-between; gap: 10px; padding: 0 0 18px; color: #596d7b; font-size: 10px; }
+.key-description { margin-left: 8px; color: #80909d; }
+[hidden] { display: none !important; }
+@media (max-width: 650px) { .player { padding: 0 18px; } header { min-height: 75px; } .prototype { display: none; } .brand { font-size: 11px; gap: 7px; } .open-button { padding: 8px 12px; font-size: 12px; } .song-info { padding-top: 23px; } .volume { display: none; } footer { gap: 16px; } }

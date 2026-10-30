@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1018">
+  <link rel="icon" href="data:,">
+  <title>Tab Player</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <main class="player">
+    <header>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">≋</span> TAB PLAYER <span class="prototype">POC / 01</span></div>
+      <button id="open" class="open-button" type="button"><span aria-hidden="true">＋</span> Open song</button>
+      <input id="file" type="file" accept=".song,.psarc" hidden aria-label="Select a ToneLib or Rocksmith song">
+    </header>
+    <section class="song-info" aria-label="Current song">
+      <div><p id="eyebrow" class="eyebrow">YOUR SONG. YOUR PACE.</p><h1 id="title">Pick a song. Play along.</h1><p id="subtitle">Open a ToneLib or Rocksmith file to begin.</p></div>
+      <span id="state" class="state">Ready</span>
+    </section>
+    <section id="stage" aria-label="3D bass note highway">
+      <div id="empty" class="empty"><span class="empty-line"></span><p>Your next bassline starts here.</p><span>.song <span class="dot">/</span> .psarc</span></div>
+      <div id="legend" class="legend" aria-label="Strings, lowest to highest"></div>
+      <div class="stage-label">PLAY LINE <span aria-hidden="true">↓</span></div>
+    </section>
+    <p id="message" role="status" aria-live="polite"></p>
+    <footer>
+      <button id="play" class="play-button" type="button" disabled aria-label="Play"><span id="play-icon" aria-hidden="true">▶</span></button>
+      <div class="timeline-wrap"><div class="timeline-labels"><output id="elapsed">0:00</output><output id="duration">0:00</output></div><input id="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Song position" disabled></div>
+      <label class="volume">Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Volume"></label>
+    </footer>
+    <div class="footnote"><span>Made for playing.</span><span>Space <span class="key-description">play / pause</span></span></div>
+  </main>
+  <audio id="audio" preload="metadata"></audio>
+</body>
+</html>
