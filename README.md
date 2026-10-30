@@ -14,6 +14,19 @@ available on the development machine. The first launch downloads dependencies
 and the vgmstream audio decoder. Subsequent launches use the local copies.
 Leave the launcher window open while playing; Ctrl+C stops the server.
 
+The app opens to the song library. Choose **Song folders → Browse…**, select a
+folder and click **Add folder**. You can also paste a folder path. Add as many
+folders as you need; subfolders are included and overlapping paths are deduplicated.
+Songs appear during the first background scan. Later launches open the saved
+catalog immediately and check for new or changed files in the background.
+
+Search by song, artist, album or tuning (for example `EADG`). Search matches word
+prefixes. Sort by title or artist, or filter by source format. Click a row or
+use ↑/↓ to select it. The selected song previews after a short delay; the
+checkbox turns automatic previews off. Press Enter, double-click a row, or use
+**Play song** to open its chart. **Library** returns to browsing and pauses the
+song. **Open song** still opens a single file using the Windows file picker.
+
 Play/pause: the circular button or Space. Drag the timeline to seek. All playback
 is at the original speed. If a browser blocks automatic audio, press Play once.
 Use a recent Chromium browser with WebGL 2 support.
@@ -50,23 +63,53 @@ sessions, `--file "C:\path\to\song.song"` preloads a file without a picker.
   The current hand-position timeline is inferred from note groups.
   Travel speed is chosen once from the song's beat map. The audio stays at its
   original speed and notes reach the strike plane at their authored timestamps.
-- No song library, accounts, or cloud service. Selected files are sent only to the
-  loopback server on this computer. The app never modifies original song files.
+- A persistent, local SQLite song library. The index reads metadata without
+  decoding backing audio or loading note charts. One preferred bass arrangement
+  per song is listed, including multiple songs inside a Rocksmith pack. Alternate
+  arrangements and duplicate song versions in different files are not merged.
+  ToneLib library durations currently come from the score timing.
+- A virtual list with 100-row API pages, at most eight cached pages in the
+  browser, and album art loaded on demand. Stable result snapshots keep the list
+  from shuffling as a scan adds songs. Background refresh preserves the top
+  visible song and selection. Search uses SQLite FTS; scans use one worker and
+  unchanged files are identified by path, size, modification time and index version.
+- Rocksmith previews use the embedded preview bank when present; otherwise a
+  short excerpt of the backing track is decoded. ToneLib previews extract the
+  embedded compressed backing audio and decode only the excerpt. A separate
+  preview player never advances the highway. Full-song preparation takes priority
+  over queued previews; obsolete preview selections are skipped.
+- No accounts or cloud service. Indexed songs open directly from their saved
+  local paths. Manually selected files are sent only to the loopback server on
+  this computer. Original song files are never modified.
+
+Folder choices and the catalog live in `.data/library.sqlite3`. **Rescan now**
+checks for changes; automatic checks also run at startup and every five minutes.
+Unavailable folders retain their songs with playback disabled. Removing a folder
+only removes it from the library. Unsupported files are isolated and listed in
+the folder dialog. General ToneLib parsing limits above still apply at playback.
 
 Prepared charts and extracted/decoded audio are cached under `.cache/songs/`.
-Rocksmith audio is cached as WAV, which can occupy substantial disk space. These
-generated files, `.tools/`, `.venv/` and `node_modules/` are ignored by Git.
+Rocksmith audio is cached as WAV. Warm indexed playback uses the saved chart key
+without re-uploading or hashing the archive. The first play of an uncached song
+still needs preparation. Artwork and up-to-30-second WAV previews are cached
+under `.cache/library/`. Soft budgets are 64 MiB for art, 256 MiB for previews,
+and 4 GiB for full-song audio; assets used in the last ten minutes are protected.
+Cleanup runs when new assets are created, at most once per 30 seconds. All local
+state, generated files, `.tools/`, `.venv/` and `node_modules/` are ignored by Git.
 
 ## Verify
 
 ```powershell
 uv run python -m unittest discover -s tests -v
 npm.cmd test
+uv run python scripts/benchmark_library.py
 ```
 
 The automated checks cover timing, ties, string order, authored difficulty
-selection, byte-range seeking, visible-note lookup after seeks, and hand-shift
-continuity with independent camera following. Real-file
+selection, byte-range seeking, hand-shift continuity, catalog persistence,
+incremental scans, overlapping/unavailable folders, stable paging, cache reuse,
+preview priority/cancellation and virtual-list bounds. The benchmark measures
+local catalog API latency with the server running. Real-file
 and browser checks are documented in `VALIDATION.md`.
 
 ## Offline perspective calibration

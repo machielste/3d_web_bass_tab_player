@@ -1,8 +1,9 @@
-import { Highway } from './highway.js';
+import { SongLibrary, api, waitJob } from './library.js';
+import { formatTime } from './virtual-list.js';
 
 const $ = id => document.getElementById(id);
 const audio = $('audio');
-let highway, chart = null, loading = false, request = 0, seeking = false;
+let highway, highwayPromise, library, chart = null, loading = false, request = 0, seeking = false;
 audio.volume = Number($('volume').value);
 
 function message(text = '', error = false) {
@@ -10,9 +11,27 @@ function message(text = '', error = false) {
   $('message').classList.toggle('error', error);
 }
 
-function formatTime(seconds) {
-  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-  return `${Math.floor(safe / 60)}:${String(Math.floor(safe % 60)).padStart(2, '0')}`;
+function setView(player) {
+  $('library').hidden = player; $('playback').hidden = !player;
+  $('show-library').classList.toggle('active', !player);
+  $('show-player').classList.toggle('active', player);
+  library?.setVisible(!player);
+  if (!player) { audio.pause(); history.replaceState({}, '', '/'); }
+  else {
+    if (chart) history.replaceState({}, '', `?song=${chart.id}`);
+    highway?.resize();
+  }
+}
+
+async function ensureHighway() {
+  if (!highwayPromise) highwayPromise = import('./highway.js').then(({ Highway }) => {
+    highway = new Highway($('stage'));
+    highway.renderer.domElement.addEventListener('webglcontextlost', event => {
+      event.preventDefault(); audio.pause(); message('The graphics connection was lost. Reload the page to continue.', true);
+    });
+    return highway;
+  }).catch(error => { highwayPromise = null; throw error; });
+  return highwayPromise;
 }
 
 function updateState() {
@@ -23,7 +42,8 @@ function updateState() {
   $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
   $('play').disabled = !chart || loading;
   $('seek').disabled = !chart || loading;
-  $('open').disabled = loading || !highway;
+  $('open').disabled = loading;
+  $('show-player').hidden = !chart && !loading;
 }
 
 async function play() {
@@ -37,6 +57,7 @@ async function play() {
 }
 
 async function showSong(song, autoplay = true) {
+  await ensureHighway();
   highway.setSong(song);
   chart = song;
   $('empty').hidden = true;
@@ -49,6 +70,7 @@ async function showSong(song, autoplay = true) {
     element.append(dot, document.createTextNode(name)); return element;
   }));
   document.title = `${chart.title} — Tab Player`;
+  history.replaceState({}, '', `?song=${chart.id}`);
   audio.src = chart.audio_url;
   audio.load();
   $('seek').value = '0';
@@ -57,12 +79,32 @@ async function showSong(song, autoplay = true) {
   if (autoplay) await play();
 }
 
+library = new SongLibrary(async song => {
+  const id = ++request;
+  audio.pause(); loading = true; setView(true); updateState();
+  message(`Opening ${song.title}…`);
+  try {
+    const { job } = await api('play', { id: song.id });
+    const result = await waitJob(job, () => id === request);
+    if (!result || id !== request) return;
+    await showSong(result);
+  } catch (error) {
+    if (id === request) message(error.message || 'Could not open this song.', true);
+  } finally { if (id === request) { loading = false; updateState(); } }
+});
+
+$('show-library').addEventListener('click', () => {
+  ++request; loading = false; message(); setView(false); updateState();
+  document.title = 'Song Library — Tab Player';
+});
+$('show-player').addEventListener('click', () => setView(true));
+
 $('open').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', async () => {
   const file = $('file').files[0];
   if (!file) return;
   const id = ++request;
-  audio.pause(); loading = true; updateState();
+  audio.pause(); loading = true; setView(true); updateState();
   message(`Opening ${file.name}…`);
   try {
     const response = await fetch(`/api/open?name=${encodeURIComponent(file.name)}`, {
@@ -79,7 +121,7 @@ $('file').addEventListener('change', async () => {
   }
 });
 $('play').addEventListener('click', () => audio.paused ? play() : audio.pause());
-$('volume').addEventListener('input', () => { audio.volume = Number($('volume').value); });
+$('volume').addEventListener('input', () => { audio.volume = Number($('volume').value); library.audio.volume = audio.volume * .6; });
 $('seek').addEventListener('input', () => {
   seeking = true;
   audio.currentTime = Number($('seek').value);
@@ -88,39 +130,39 @@ $('seek').addEventListener('input', () => {
 });
 $('seek').addEventListener('change', () => { seeking = false; });
 for (const event of ['play', 'pause', 'ended', 'loadedmetadata']) audio.addEventListener(event, updateState);
-for (const event of ['pause', 'ended', 'seeked']) audio.addEventListener(event, () => highway?.render(audio.currentTime));
+for (const event of ['pause', 'ended', 'seeked']) audio.addEventListener(event, () => { if (!$('playback').hidden) highway?.render(audio.currentTime); });
 audio.addEventListener('loadedmetadata', () => {
   $('duration').textContent = formatTime(audio.duration);
   $('seek').max = String(audio.duration);
 });
 audio.addEventListener('error', () => message('The backing audio could not be played. Try another song.', true));
 document.addEventListener('keydown', event => {
-  if (event.code === 'Space' && !['INPUT', 'BUTTON'].includes(document.activeElement.tagName) && chart && !loading) {
+  if (event.code === 'Space' && !$('playback').hidden && !['INPUT', 'BUTTON', 'SELECT'].includes(document.activeElement.tagName) && chart && !loading) {
     event.preventDefault(); audio.paused ? play() : audio.pause();
   }
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) highway?.render(audio.currentTime); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !$('playback').hidden) highway?.render(audio.currentTime);
+  if (document.hidden) library.stopPreview();
+});
 
 try {
-  highway = new Highway($('stage'));
-  highway.renderer.domElement.addEventListener('webglcontextlost', event => {
-    event.preventDefault(); audio.pause(); message('The graphics connection was lost. Reload the page to continue.', true);
-  });
   updateState();
   const key = new URL(location.href).searchParams.get('song');
   if (key && /^[a-f0-9]{64}$/.test(key)) {
+    setView(true);
     const response = await fetch(`/songs/${key}/chart.json`);
     if (!response.ok) throw new Error('The preloaded song is no longer available.');
     await showSong(await response.json(), false);
   }
 } catch (error) {
   message(error.message || 'The 3D player needs a browser with WebGL 2 support.', true);
-  $('open').disabled = !highway;
+  updateState();
 }
 
 let lastHudTime = 0;
 function frame(now) {
-  if (!document.hidden) {
+  if (!document.hidden && !$('playback').hidden) {
     if (!audio.paused) highway?.render(audio.currentTime);
     if (now - lastHudTime > 100) {
       lastHudTime = now;

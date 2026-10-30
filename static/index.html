@@ -12,10 +12,28 @@
 <body>
   <main class="player">
     <header>
-      <div class="brand"><span class="brand-mark" aria-hidden="true">≋</span> TAB PLAYER <span class="prototype">POC / 01</span></div>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">≋</span> TAB PLAYER <span class="prototype">LOCAL / 01</span></div>
+      <nav class="header-actions" aria-label="Views"><button id="show-library" class="text-button active" type="button">Library</button><button id="show-player" class="text-button" type="button" hidden>Player</button>
       <button id="open" class="open-button" type="button"><span aria-hidden="true">＋</span> Open song</button>
+      </nav>
       <input id="file" type="file" accept=".song,.psarc" hidden aria-label="Select a ToneLib or Rocksmith song">
     </header>
+    <section id="library" class="library" aria-label="Song library">
+      <div class="library-heading"><div><p class="eyebrow">PICK UP WHERE YOU PLAY.</p><h1>Your music, ready to play.</h1><p id="scan-status" class="muted" role="status">Loading your library…</p></div><button id="folders" class="secondary-button" type="button">Song folders <span aria-hidden="true">↗</span></button></div>
+      <div class="library-tools"><label class="search-field"><span aria-hidden="true">⌕</span><input id="library-search" type="search" placeholder="Search songs, artists or albums" aria-label="Search songs"></label><label class="select-field">Sort <select id="library-sort" aria-label="Sort songs"><option value="title">Song title</option><option value="artist">Artist</option></select></label><label class="select-field"><select id="library-format" aria-label="Song format"><option value="">All formats</option><option>Rocksmith 2014</option><option>ToneLib</option></select></label></div>
+      <div class="library-content"><section class="catalog" aria-label="Songs"><div class="catalog-heading"><span id="result-count">0 songs</span><button id="refresh-library" class="text-button" type="button" title="Refresh results from the catalog">Refresh list ↻</button></div>
+        <div class="catalog-columns" aria-hidden="true"><span>SONG / ARTIST</span><span>TUNING</span><span>TIME</span></div>
+        <div class="catalog-body"><div id="song-list" role="listbox" aria-label="Songs" tabindex="0"><div id="catalog-spacer"></div><div id="catalog-rows"></div></div>
+          <div id="library-empty" class="library-empty" hidden><span class="empty-line"></span><h2>No songs here yet.</h2><p>Add a folder of Rocksmith or ToneLib files,<br>or try another search.</p><button id="empty-add-folder" class="secondary-button" type="button">Add a song folder</button></div>
+        </div><div class="catalog-foot"><span>↑ ↓ select <span class="dot">/</span> Enter play</span><span>Double-click to play</span></div></section>
+        <aside class="selection-panel" aria-label="Selected song"><div id="no-selection"><div class="cover detail-cover"><span class="cover-symbol">≋</span></div><p class="muted">Select a song to see more.</p></div>
+          <div id="song-detail" hidden><div id="selected-cover"></div><p class="eyebrow detail-eyebrow">READY WHEN YOU ARE</p><h2 id="selected-title"></h2><p id="selected-artist"></p><dl class="song-facts"><div><dt>Album</dt><dd id="selected-album"></dd></div><div><dt>Length</dt><dd id="selected-duration"></dd></div><div><dt>Source</dt><dd id="selected-format"></dd></div><div><dt>Tuning · low to high</dt><dd id="selected-tuning"></dd></div></dl>
+          <button id="play-selected" class="open-button play-song" type="button"><span aria-hidden="true">▶</span> Play song</button><div class="preview-controls"><button id="preview-replay" class="text-button" type="button">↻ Preview</button><span id="preview-status" role="status"></span></div><p id="selected-file"></p></div>
+          <label class="preview-toggle"><input id="preview-enabled" type="checkbox" checked> Automatic song previews</label>
+        </aside>
+      </div><p id="library-message" role="status" aria-live="polite"></p>
+    </section>
+    <div id="playback" class="playback" hidden>
     <section class="song-info" aria-label="Current song">
       <div><p id="eyebrow" class="eyebrow">YOUR SONG. YOUR PACE.</p><h1 id="title">Pick a song. Play along.</h1><p id="subtitle">Open a ToneLib or Rocksmith file to begin.</p></div>
       <span id="state" class="state">Ready</span>
@@ -32,7 +50,10 @@
       <label class="volume">Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Volume"></label>
     </footer>
     <div class="footnote"><span>Made for playing.</span><span>Space <span class="key-description">play / pause</span></span></div>
+    </div>
   </main>
+  <dialog id="folder-dialog" aria-labelledby="folders-title"><div class="dialog-heading"><div><p class="eyebrow">YOUR LOCAL COLLECTION</p><h2 id="folders-title">Song folders</h2></div><button id="close-folders" class="text-button" type="button" aria-label="Close song folders">✕</button></div><p class="muted">Add folders containing .psarc or .song files. Subfolders are included.</p><ul id="folder-list"></ul><p id="no-folders" class="muted">No folders added yet.</p><form id="folder-form"><label for="folder-path">Folder path</label><div class="folder-input"><input id="folder-path" placeholder="C:\Music\Rocksmith DLC" required><button id="browse-folder" class="secondary-button" type="button">Browse…</button></div><button id="add-folder" class="open-button" type="submit">Add folder</button></form><p id="folder-message" role="status"></p><div class="dialog-bottom"><span class="muted">Folders are checked at startup and every 5 minutes.</span><button id="rescan" class="text-button" type="button">Rescan now ↻</button></div><details id="skipped-files" hidden><summary id="skipped-summary"></summary><ul id="skipped-list"></ul></details></dialog>
   <audio id="audio" preload="metadata"></audio>
+  <audio id="preview-audio" preload="none"></audio>
 </body>
 </html>

@@ -6,7 +6,9 @@ import argparse
 import hashlib
 import json
 import mimetypes
+import os
 import re
+import subprocess
 import tempfile
 import threading
 import traceback
@@ -17,6 +19,7 @@ from urllib.parse import parse_qs, urlsplit
 from urllib.request import urlopen
 
 from importers import ImportFailure, read_rocksmith, read_tonelib
+from library import Library, MediaJobs, trim_cache
 
 ROOT = Path(__file__).resolve().parent
 CACHE = ROOT / ".cache/songs"
@@ -24,12 +27,14 @@ IMPORT_LOCK = threading.Lock()
 CACHE_VERSION = b"tab-player-chart-v1\0"
 
 
-def prepare(path: Path, original_name: str | None = None) -> dict:
+def prepare(path: Path, original_name: str | None = None, *, arrangement: str | None = None) -> dict:
     name = original_name or path.name
     suffix = Path(name).suffix.lower()
     if suffix not in (".song", ".psarc"):
         raise ImportFailure("Choose a ToneLib .song or Windows Rocksmith .psarc file.")
     digest = hashlib.sha256(CACHE_VERSION)
+    if arrangement:
+        digest.update(arrangement.encode("utf-8") + b"\0")
     with path.open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -41,15 +46,17 @@ def prepare(path: Path, original_name: str | None = None) -> dict:
         if manifest.exists():
             chart = json.loads(manifest.read_text(encoding="utf-8"))
             if (destination / chart["audio_file"]).exists():
+                os.utime(destination / chart["audio_file"], None)
                 return chart
         with tempfile.TemporaryDirectory(prefix="preparing-", dir=CACHE) as working:
             staging = Path(working)
-            chart = (read_tonelib if suffix == ".song" else read_rocksmith)(path, staging)
+            chart = read_tonelib(path, staging) if suffix == ".song" else read_rocksmith(path, staging, arrangement)
             chart.update(id=key, filename=name, audio_url=f"/songs/{key}/{chart['audio_file']}")
             (staging / "chart.json").write_text(json.dumps(chart, ensure_ascii=False), encoding="utf-8")
             destination.mkdir(exist_ok=True)
             for item in staging.iterdir():
                 item.replace(destination / item.name)
+        trim_cache(CACHE, "*/audio.*", 4 * 1024 ** 3)
         return chart
 
 
@@ -90,12 +97,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = urlsplit(self.path)
-        if parts.path != "/api/open":
-            return self.json({"error": "Not found"}, 404)
+        if not self.local_request():
+            return self.json({"error": "Use the local player window."}, 403)
         origin = self.headers.get("Origin")
         if origin and origin != f"http://{self.headers.get('Host')}":
             return self.json({"error": "Open songs from the local player window."}, 403)
         try:
+            if parts.path.startswith("/api/library/"):
+                return self.library_post(parts.path)
+            if parts.path != "/api/open":
+                return self.json({"error": "Not found"}, 404)
             length = int(self.headers.get("Content-Length", "0"))
             if not 0 < length <= 1024 * 1024 * 1024:
                 raise ImportFailure("Choose a song file smaller than 1 GB.")
@@ -122,14 +133,108 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self.json({"error": "This file could not be opened by the prototype. Try another .song or _p.psarc file."}, 422)
 
+    def local_request(self):
+        return self.headers.get("Host") in (f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}")
+
+    def library_post(self, path):
+        length = int(self.headers.get("Content-Length", "0"))
+        if not 0 <= length <= 8192:
+            raise ImportFailure("The library request is too large.")
+        body = json.loads(self.rfile.read(length) or b"{}")
+        library, jobs = self.server.library, self.server.jobs
+        if path == "/api/library/folders/pick/cancel":
+            process = self.server.picker_process
+            if process is not None and process.poll() is None:
+                try:
+                    process.terminate()
+                except OSError:
+                    pass
+            return self.json({"ok": True})
+        if path == "/api/library/folders/pick":
+            # The GUI runs on an STA thread in a child process. The server's
+            # request threads never own GUI objects or block other requests.
+            if not self.server.picker_lock.acquire(blocking=False):
+                raise ImportFailure("A folder picker is already open.")
+            try:
+                process = subprocess.Popen(["powershell.exe", "-NoProfile", "-STA", "-File", str(ROOT / "scripts/pick_folder.ps1")], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                self.server.picker_process = process
+                try:
+                    output, _ = process.communicate(timeout=180)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate()
+                    raise ImportFailure("The folder picker timed out. You can paste the folder path instead.") from None
+                if process.returncode:
+                    raise ImportFailure("The Windows folder picker could not open.")
+                return self.json(json.loads(output.decode("utf-8-sig")))
+            finally:
+                self.server.picker_process = None
+                self.server.picker_lock.release()
+        if path == "/api/library/folders/add":
+            library.add_root(str(body.get("path", "")))
+            return self.json(library.status())
+        if path == "/api/library/folders/remove":
+            library.remove_root(int(body.get("id", 0)))
+            return self.json(library.status())
+        if path == "/api/library/rescan":
+            library.wake.set()
+            return self.json({"ok": True})
+        if path == "/api/library/preview/cancel":
+            jobs.cancel_preview(str(body.get("client", ""))[:64], int(body.get("selection", 0)))
+            return self.json({"ok": True})
+        if path in ("/api/library/play", "/api/library/preview"):
+            return self.json(jobs.submit(path.rsplit("/", 1)[-1], str(body.get("id", "")), str(body.get("client", ""))[:64], int(body.get("selection", 0))))
+        return self.json({"error": "Not found"}, 404)
+
     def do_HEAD(self):
         self.do_GET(head_only=True)
 
     def do_GET(self, head_only=False):
-        path = urlsplit(self.path).path
+        if not self.local_request():
+            return self.send_error(403)
+        parts = urlsplit(self.path)
+        path = parts.path
+        query = parse_qs(parts.query)
         if path == "/api/health":
             return self.json({"app": "tab-player", "version": "0.1.0"})
-        if path.startswith("/songs/"):
+        if path.startswith("/api/library/"):
+            try:
+                if path == "/api/library/status":
+                    return self.json(self.server.library.status())
+                if path == "/api/library/errors":
+                    return self.json({"items": self.server.library.errors()})
+                if path == "/api/library/songs":
+                    value = lambda key, default="": query.get(key, [default])[0]
+                    return self.json(self.server.library.page(query=value("q"), sort=value("sort"), format=value("format"), snapshot=value("snapshot"), offset=int(value("offset", "0")), anchor=value("anchor"), selected=value("selected")))
+                if path.startswith("/api/library/jobs/"):
+                    return self.json(self.server.jobs.get(path.rsplit("/", 1)[-1]))
+                return self.json({"error": "Not found"}, 404)
+            except (ValueError, ImportFailure) as error:
+                return self.json({"error": str(error)}, 422)
+        if path.startswith("/library/art/"):
+            match = re.fullmatch(r"/library/art/([a-f0-9]{64})/([a-f0-9]{64})\.jpg", path)
+            if not match:
+                return self.send_error(404)
+            try:
+                file = self.server.library.artwork_for(match[1], match[2])
+            except Exception:
+                # Keep the list usable for missing/unsupported artwork.
+                body = b'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#182c36"/><path d="M64 96h128M64 128h128M64 160h128" stroke="#527e84" stroke-width="4"/></svg>'
+                self.send_response(200)
+                self.send_header("Content-Type", "image/svg+xml")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "max-age=60")
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(body)
+                return
+        elif path.startswith("/library/media/"):
+            match = re.fullmatch(r"/library/media/([a-f0-9]{64}\.wav)", path)
+            if not match:
+                return self.send_error(404)
+            file = self.server.library.media / match[1]
+        elif path.startswith("/songs/"):
             match = re.fullmatch(r"/songs/([a-f0-9]{64})/(chart\.json|audio\.(?:wav|flac|ogg))", path)
             if not match:
                 return self.send_error(404)
@@ -138,7 +243,7 @@ class Handler(BaseHTTPRequestHandler):
             file = ROOT / "node_modules/three/build" / path.rsplit("/", 1)[-1]
         else:
             static = {"/": "index.html", "/app.js": "app.js", "/highway.js": "highway.js",
-                      "/timeline.js": "timeline.js", "/style.css": "style.css"}
+                      "/timeline.js": "timeline.js", "/style.css": "style.css", "/library.js": "library.js", "/virtual-list.js": "virtual-list.js"}
             if path not in static:
                 return self.send_error(404)
             file = ROOT / "static" / static[path]
@@ -158,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type or mimetypes.guess_type(str(file))[0] or "application/octet-stream")
         self.send_header("Content-Length", str(end - start + 1))
         self.send_header("Accept-Ranges", "bytes")
-        self.send_header("Cache-Control", "public, max-age=31536000, immutable" if path.startswith("/songs/") else "no-cache")
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable" if path.startswith(("/songs/", "/library/")) else "no-cache")
         self.send_header("X-Content-Type-Options", "nosniff")
         if partial:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
@@ -206,6 +311,11 @@ def main():
             return
         raise
     server.daemon_threads = True
+    server.library = Library(ROOT / ".data/library.sqlite3", ROOT / ".cache/library")
+    server.jobs = MediaJobs(server.library, prepare, CACHE, ROOT / ".tools/vgmstream/vgmstream-cli.exe")
+    server.picker_lock = threading.Lock()
+    server.picker_process = None
+    server.library.start()
     url = f"http://127.0.0.1:{server.server_port}/"
     if chart:
         url += f"?song={chart['id']}"
@@ -218,6 +328,9 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        server.library.close()
+        if server.picker_process is not None and server.picker_process.poll() is None:
+            server.picker_process.terminate()
         server.server_close()
 
 

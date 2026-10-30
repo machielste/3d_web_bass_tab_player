@@ -110,3 +110,54 @@ near 9:25, with fret 20–21 notes visible against the surrounding fret grid. Se
 into that passage and back to Sleep On It worked without browser console errors.
 The new geometry uses reusable position buffers; the guide is not rebuilt as
 new meshes on each frame.
+
+## Local song library
+
+Seventeen Python checks and thirteen JavaScript checks pass. Library coverage
+includes persistence across restarts, unchanged-file scan avoidance, overlapping
+roots, unavailable drives, deleted files, invalidation after a file changes,
+stable result snapshots, multi-song manifest discovery, song-specific soundbank
+selection, cached playback without reimporting, cache eviction, preview queue
+priority/cancellation, decoder pipe handling and virtual-list bounds.
+
+The installed Rocksmith DLC folder produced 5,116 bass song entries; 258 files
+had no supported bass arrangement. Adding the five-string Wonderland ToneLib
+folder brought the catalog to 5,117 songs. The last reconciliation checked 5,186
+files in 2.313 seconds and reparsed zero unchanged files. That work runs in the
+background; the saved catalog can be queried before it completes. First-time
+indexing takes longer and was observed while browsing and searching.
+
+On this computer, twenty local HTTP samples per operation measured:
+
+| Operation | Median | 95th percentile |
+| --- | ---: | ---: |
+| First catalog page and result snapshot | 28.20 ms | 32.07 ms |
+| Search for `love` | 19.47 ms | 28.73 ms |
+| Last page of an existing result snapshot | 16.46 ms | 23.42 ms |
+
+Five cached Sleep On It preparation requests, including HTTP and job polling,
+took 16–41 ms, with a 25.53 ms median. This measures preparation, not browser
+audio startup or total application launch time. `scripts/benchmark_library.py`
+can repeat the catalog measurements with the player running.
+
+The browser was used to add folders, search/filter, navigate to the end of the
+full collection, refresh without losing the current position, play previews,
+open songs and return to the library. At the end of the 5,116-song list only
+15 rows were mounted. Rocksmith's 28-second embedded Sleep On It preview and a
+30-second ToneLib excerpt played on a separate transport while the highway's
+audio remained paused. Full playback of both charts was verified, including
+five-string B–E–A–D–G ordering. The user confirmed that the native Windows folder
+picker appeared on their desktop; it was not exposed in the automation inventory.
+
+Desktop layout was checked at 1280 × 800, and the narrow layout at 430 × 900.
+The narrow layout had no horizontal overflow and retained accessible playback
+and tuning controls. Temporary viewport overrides were reset. The final browser
+check reported no console errors or warnings. No quantitative frame-rate or
+end-to-end cold-start claim is made.
+
+Current limits: folder changes are reconciled every five minutes or manually,
+rather than through an OS watcher. The first playback of an uncached song still
+requires full chart/audio preparation. General ToneLib compatibility retains
+the earlier importer limits; its catalog duration comes from score timing.
+Album art is read from Rocksmith archives when available. Generated previews,
+art and full-song audio have soft cache budgets, protecting recently used assets.

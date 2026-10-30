@@ -298,8 +298,8 @@ def full_difficulty_notes(levels: dict[int, list], iterations: list[tuple]) -> l
     return notes
 
 
-def read_rocksmith(path: Path, destination: Path) -> dict:
-    archive = Psarc(path)
+def rocksmith_bass(archive: Psarc) -> list[dict]:
+    """Manifest-only discovery; never reads SNGs, artwork or audio."""
     candidates = []
     for name in archive.files:
         if name.startswith("manifests/") and name.endswith(".json"):
@@ -308,9 +308,38 @@ def read_rocksmith(path: Path, destination: Path) -> dict:
                 attrs = entry.get("Attributes", {})
                 if attrs.get("ArrangementName", "").lower() == "bass":
                     candidates.append(attrs)
-    if not candidates:
-        raise ImportFailure("This Rocksmith file has no bass arrangement.")
-    attrs = min(candidates, key=lambda a: (not a.get("ArrangementProperties", {}).get("represent", 0), a.get("FullName", "")))
+    return sorted(candidates, key=lambda a: (not a.get("ArrangementProperties", {}).get("represent", 0), a.get("FullName", "")))
+
+
+def rocksmith_audio(archive: Psarc, attrs: dict, *, preview=False) -> str | None:
+    field = "PreviewBankPath" if preview else "SongBank"
+    bank_name = Path(attrs.get(field, "")).name
+    banks = [n for n in archive.files if n.endswith(".bnk") and Path(n).name == bank_name] if bank_name else []
+    for bank in banks:
+        data = archive.read(bank)
+        pos = 0
+        while pos + 8 <= len(data):
+            tag, length = struct.unpack_from("<4sI", data, pos)
+            if tag == b"DIDX":
+                for offset in range(pos + 8, min(pos + 8 + length, len(data)) - 11, 12):
+                    audio_id = struct.unpack_from("<I", data, offset)[0]
+                    wem = next((n for n in archive.files if Path(n).name == f"{audio_id}.wem"), None)
+                    if wem:
+                        return wem
+            pos += 8 + length
+    # An ambiguous pack must not silently play another song's audio.
+    if preview or len({a.get("SongKey", a.get("SongName")) for a in rocksmith_bass(archive)}) > 1:
+        return None
+    wems = [n for n in archive.files if n.endswith(".wem")]
+    return max(wems, key=lambda n: archive.entries[archive.files[n]][1]) if wems else None
+
+
+def read_rocksmith(path: Path, destination: Path, arrangement: str | None = None) -> dict:
+    archive = Psarc(path)
+    candidates = rocksmith_bass(archive)
+    attrs = next((a for a in candidates if a.get("SongAsset") == arrangement), None) if arrangement else next(iter(candidates), None)
+    if attrs is None:
+        raise ImportFailure("This Rocksmith file has no matching bass arrangement.")
     urn = attrs.get("SongAsset", "")
     asset = urn.rsplit(":", 1)[-1]
     sng_name = next((name for name in archive.files if name.startswith("songs/bin/generic/") and Path(name).stem == asset), None)
@@ -319,28 +348,9 @@ def read_rocksmith(path: Path, destination: Path) -> dict:
     notes, beats = parse_sng(archive.read(sng_name))
     offsets = attrs.get("Tuning", {})
     tuning = [pitch + int(offsets.get(f"string{i}", 0)) for i, pitch in enumerate((28, 33, 38, 43))]
-    # Follow the main soundbank's WEM id when available, never the preview bank.
-    banks = [name for name in archive.files if name.endswith(".bnk") and "preview" not in name.lower()]
-    wem = None
-    for bank in banks:
-        data = archive.read(bank)
-        pos = 0
-        while pos + 8 <= len(data):
-            tag, length = struct.unpack_from("<4sI", data, pos)
-            if tag == b"DIDX":
-                for offset in range(pos + 8, min(pos + 8 + length, len(data)), 12):
-                    audio_id = struct.unpack_from("<I", data, offset)[0]
-                    wem = next((n for n in archive.files if Path(n).name == f"{audio_id}.wem"), None)
-                    if wem:
-                        break
-            pos += 8 + length
-        if wem:
-            break
+    wem = rocksmith_audio(archive, attrs)
     if wem is None:
-        wems = [name for name in archive.files if name.endswith(".wem")]
-        if not wems:
-            raise ImportFailure("No backing audio was found in this Rocksmith file.")
-        wem = max(wems, key=lambda n: archive.entries[archive.files[n]][1])
+        raise ImportFailure("No matching backing audio was found in this Rocksmith file.")
     decoder = Path(__file__).parent / ".tools/vgmstream/vgmstream-cli.exe"
     if not decoder.exists():
         raise ImportFailure("The Rocksmith audio decoder is missing. Launch with Start Player.cmd to set it up.")
