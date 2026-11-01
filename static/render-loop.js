@@ -21,8 +21,8 @@ export class RenderLoop {
 }
 
 export function renderPixelRatio(width, height, deviceRatio, scale = 1) {
-  // A large/fullscreen or high-DPI window must not multiply GPU work without a
-  // bound. Keep the CSS dimensions and calibrated projection unchanged.
+  // Explicit Performance mode only. Native and supersampled modes keep a fixed
+  // display-relative resolution rather than inferring GPU load from frame gaps.
   return Math.min(deviceRatio, 1.75, Math.sqrt(2_000_000 / Math.max(1, width * height))) * scale;
 }
 

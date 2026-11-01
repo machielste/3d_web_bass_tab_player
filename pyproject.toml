@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = ["pycryptodome>=3.23,<4", "pillow>=11,<13"]
 
 [dependency-groups]
+build = ["pyinstaller>=6.16,<7"]
 calibration = ["numpy>=2,<3"]
 
 [tool.uv]

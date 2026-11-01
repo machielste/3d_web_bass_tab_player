@@ -4,6 +4,8 @@
   through npm; its license is in `node_modules/three/LICENSE`.
 - PyCryptodome: https://www.pycryptodome.org/ — BSD/public-domain components.
   Installed in the project virtual environment.
+- Pillow: https://python-pillow.org/ — MIT-CMU/HPND and bundled library notices.
+  Used for library artwork; installed in the project virtual environment.
 - vgmstream r2168 Windows x64: https://github.com/vgmstream/vgmstream — ISC and
   bundled codec licenses. The original distribution and its `COPYING` file are
   retained under `.tools/vgmstream/`. The launcher downloads the official release.
@@ -18,3 +20,9 @@
   only the documented subset is supported here.
 
 No recordings or song archives are bundled with the application.
+
+Portable builds include Python, Pillow, PyCryptodome and Three.js notices under
+`licenses/`, including Python's bundled-component notices. The vgmstream
+distribution and its notices are under `_internal/.tools/vgmstream/`.
+PyInstaller (https://pyinstaller.org/) is a build-only dependency; its bootloader
+exception permits redistribution of the generated application.

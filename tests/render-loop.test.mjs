@@ -52,7 +52,7 @@ test('a queued frame checks visibility again before drawing', () => {
   assert.equal(callbacks.size, 0);
 });
 
-test('render resolution is bounded at high DPI and 4K without changing logical viewport size', () => {
+test('Performance mode resolution is bounded at high DPI and 4K without changing logical viewport size', () => {
   assert.equal(renderPixelRatio(800, 600, 1), 1);
   assert.equal(renderPixelRatio(800, 600, 3), 1.75);
   for (const [width, height] of [[1920, 1080], [3840, 2160], [7680, 4320]]) {

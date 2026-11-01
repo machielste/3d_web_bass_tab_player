@@ -44,6 +44,7 @@ document.getElementById('run').addEventListener('click', () => {
     document.getElementById('results').textContent = JSON.stringify({
       viewport: [stage.clientWidth, stage.clientHeight],
       drawingBuffer: [highway.renderer.domElement.width, highway.renderer.domElement.height],
+      resolutionMode: highway.resolutionMode,
       resolutionScale: highway.quality?.scale ?? 1,
       frames: intervals.length,
       fps: +(1000 / (intervals.reduce((a, b) => a + b, 0) / intervals.length)).toFixed(1),

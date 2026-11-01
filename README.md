@@ -46,6 +46,41 @@ uv run python server.py --no-browser
 Open the printed loopback URL. `--port 8766` selects a different port. For test
 sessions, `--file "C:\path\to\song.song"` preloads a file without a picker.
 
+## Build a portable ZIP
+
+Double-click **Build Portable.cmd** in the project root. Build on Windows x64
+with [uv](https://docs.astral.sh/uv/) and Node.js/npm installed. The first build
+downloads the locked Python build dependencies and, if missing, the vgmstream
+decoder. Each build installs Three.js from `package-lock.json` and packages the
+current working tree, including uncommitted changes.
+
+The shareable result is **`dist/TabPlayer-0.1.0-windows-x64.zip`** (the version
+comes from `pyproject.toml`). Send that ZIP to your friend. They extract the
+whole folder somewhere writable and double-click **Start Player.cmd** inside it.
+The build includes `TabPlayer.exe`, Python, runtime libraries, the browser assets,
+audio decoder and third-party notices. Running it needs Windows 10/11 x64 and a
+recent Chromium browser with WebGL 2; Python, Node.js, uv and internet access are
+not needed on the recipient's computer.
+
+The portable library and audio cache live in `.data/` and `.cache/` beside
+`TabPlayer.exe`. Keep the executable and `_internal/` together. No personal
+library, song files or development cache is included in a build. To update, stop
+the player, extract the new ZIP into another folder, then copy `.data/` and,
+optionally, `.cache/` from the previous copy. Song paths must still exist.
+
+Before publishing the ZIP, the build extracts and launches it from an unrelated
+working directory with development tools removed from PATH. It checks the empty
+catalog, browser assets, a generated song import, audio seeking, library scan and
+search, the bundled preview decoder and persistence across restart. Failed builds
+leave an existing ZIP intact. Temporary build files are removed automatically;
+`build/` and `dist/` are ignored by Git.
+
+For a terminal build without the double-click launcher's final pause:
+
+```powershell
+uv run --locked --group build python scripts/build_portable.py
+```
+
 ## Scope
 
 - Four- and five-string generated ToneLib bass projects with embedded FLAC, WAV,
@@ -132,11 +167,20 @@ as FPS; CPU submission does not measure GPU execution.
 
 The renderer batches labels into an atlas, allocates visible-note capacity at
 song load, and redraws paused scenes only when needed. Resize requests share the
-playback animation callback. The canvas is limited to two million pixels and
-1.75 device pixels per CSS pixel. Sustained missed frames reduce its resolution;
-stable playback restores it gradually. This trades some sharpness for GPU
-headroom without changing camera geometry or audio timing. Browser scheduling,
-GPU contention and power-saving policies can still interrupt frame delivery.
+playback animation callback. **Rendering resolution** in the playback sidebar
+defaults to **100% · Native**, matching the current display's pixel density.
+Resizing, moving between monitors with different scaling, browser zoom, and
+returning to the tab refresh the canvas even while paused. **150%** and **200%**
+render at 1.5× or 2× native width and height for supersampling; 200% draws four
+times as many pixels, so it requires more GPU work. The setting is saved in this
+browser. Actual buffer dimensions and any GPU size limit appear below it and in
+the timing report. Fixed modes never reduce resolution in response to stutter.
+
+**Performance · Adaptive** retains the earlier two-million-pixel / 1.75 density
+cap and can reduce resolution after sustained missed frames, restoring it
+gradually during stable playback. Choose it when GPU headroom matters more than
+sharpness. Resolution does not change camera geometry or audio timing. Browser
+scheduling, GPU contention and power-saving policies can still interrupt frames.
 
 Highway motion interpolates the media clock along the animation-frame timeline
 and gently reconciles small timing errors. It resets on seeks, pause, buffering,

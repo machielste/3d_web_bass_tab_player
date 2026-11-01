@@ -18,11 +18,12 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import urlopen
 
+from app_paths import DECODER, RESOURCE_ROOT, STATE_ROOT
 from importers import ImportFailure, read_rocksmith, read_tonelib
 from library import Library, MediaJobs, trim_cache
 
-ROOT = Path(__file__).resolve().parent
-CACHE = ROOT / ".cache/songs"
+ROOT = RESOURCE_ROOT
+CACHE = STATE_ROOT / ".cache/songs"
 IMPORT_LOCK = threading.Lock()
 CACHE_VERSION = b"tab-player-chart-v1\0"
 
@@ -113,7 +114,7 @@ class Handler(BaseHTTPRequestHandler):
             name = parse_qs(parts.query).get("name", [""])[0]
             if Path(name).suffix.lower() not in (".song", ".psarc"):
                 raise ImportFailure("Choose a ToneLib .song or Windows Rocksmith .psarc file.")
-            incoming = ROOT / ".cache/incoming"
+            incoming = STATE_ROOT / ".cache/incoming"
             incoming.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryDirectory(dir=incoming) as folder:
                 source = Path(folder) / ("selected" + Path(name).suffix.lower())
@@ -156,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.server.picker_lock.acquire(blocking=False):
                 raise ImportFailure("A folder picker is already open.")
             try:
-                process = subprocess.Popen(["powershell.exe", "-NoProfile", "-STA", "-File", str(ROOT / "scripts/pick_folder.ps1")], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                process = subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-STA", "-File", str(ROOT / "scripts/pick_folder.ps1")], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
                 self.server.picker_process = process
                 try:
@@ -245,6 +246,7 @@ class Handler(BaseHTTPRequestHandler):
             static = {"/": "index.html", "/app.js": "app.js", "/highway.js": "highway.js",
                       "/timeline.js": "timeline.js", "/style.css": "style.css", "/library.js": "library.js", "/virtual-list.js": "virtual-list.js",
                       "/render-loop.js": "render-loop.js", "/label-batch.js": "label-batch.js",
+                      "/render-resolution.js": "render-resolution.js",
                       "/playback-clock.js": "playback-clock.js", "/frame-diagnostics.js": "frame-diagnostics.js",
                       "/benchmark.html": "benchmark.html", "/benchmark.js": "benchmark.js"}
             if path not in static:
@@ -314,8 +316,8 @@ def main():
             return
         raise
     server.daemon_threads = True
-    server.library = Library(ROOT / ".data/library.sqlite3", ROOT / ".cache/library")
-    server.jobs = MediaJobs(server.library, prepare, CACHE, ROOT / ".tools/vgmstream/vgmstream-cli.exe")
+    server.library = Library(STATE_ROOT / ".data/library.sqlite3", STATE_ROOT / ".cache/library")
+    server.jobs = MediaJobs(server.library, prepare, CACHE, DECODER)
     server.picker_lock = threading.Lock()
     server.picker_process = None
     server.library.start()

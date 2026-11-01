@@ -3,11 +3,13 @@ import { formatTime } from './virtual-list.js';
 import { RenderLoop } from './render-loop.js';
 import { PlaybackClock } from './playback-clock.js';
 import { FrameDiagnostics } from './frame-diagnostics.js';
+import { resolutionMode } from './render-resolution.js';
 
 const $ = id => document.getElementById(id);
 const audio = $('audio');
 let highway, highwayPromise, library, chart = null, loading = false, request = 0, seeking = false, buffering = true;
 let lastHudTime = -Infinity;
+let lastResolution = null, resolutionText = '';
 const motionClock = new PlaybackClock();
 const renderStats = new URLSearchParams(location.search).get('perf') !== '0' ? {
   root: document.createElement('div'), element: document.createElement('pre'), trace: new FrameDiagnostics(), since: 0,
@@ -19,6 +21,7 @@ const renderLoop = new RenderLoop({
   isVisible: () => highway && !document.hidden && !$('playback').hidden
 });
 audio.volume = Number($('volume').value);
+try { $('render-resolution').value = resolutionMode(localStorage.getItem('render-resolution')); } catch { /* Use native if storage is unavailable. */ }
 
 function message(text = '', error = false) {
   $('message').textContent = text;
@@ -55,6 +58,7 @@ function setView(player) {
 async function ensureHighway() {
   if (!highwayPromise) highwayPromise = import('./highway.js').then(({ Highway }) => {
     highway = new Highway($('stage'), () => renderLoop.invalidate());
+    highway.setResolution($('render-resolution').value);
     if (renderStats) {
       installRenderStats();
     }
@@ -171,6 +175,13 @@ $('volume').addEventListener('input', () => {
   audio.volume = Number($('volume').value); library.audio.volume = audio.volume * .6;
   $('volume-level').textContent = `${Math.round(audio.volume * 100)}%`;
 });
+$('render-resolution').addEventListener('change', () => {
+  const mode = resolutionMode($('render-resolution').value);
+  try { localStorage.setItem('render-resolution', mode); } catch { /* The current session still works. */ }
+  renderStats?.trace.mark(`resolution-${mode}`, performance.now(), audio.currentTime, false);
+  if (renderStats) renderStats.since = -Infinity;
+  highway?.setResolution(mode);
+});
 async function toggleFullscreen() {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -185,7 +196,6 @@ document.addEventListener('fullscreenchange', () => {
   $('fullscreen-label').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
   highway?.resize();
 });
-window.addEventListener('resize', () => highway?.resize());
 for (const event of ['focus', 'blur']) window.addEventListener(event, () => {
   renderStats?.trace.mark(event, performance.now(), audio.currentTime, false);
 });
@@ -269,7 +279,8 @@ function installRenderStats() {
       userAgent: navigator.userAgent, clock: stats.rawClock ? 'raw' : 'smooth', song: chart?.title,
       visibility: document.visibilityState, focused: document.hasFocus(), devicePixelRatio,
       viewport: [highway.width, highway.height],
-      drawingBuffer: [highway.renderer.domElement.width, highway.renderer.domElement.height]
+      drawingBuffer: [highway.renderer.domElement.width, highway.renderer.domElement.height],
+      rendering: { mode: highway.resolutionMode, ...highway.resolution, deviceRatio: highway.deviceRatio }
     });
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = 'tab-player-timing.json'; link.click();
@@ -293,13 +304,18 @@ function drawFrame(now) {
   const visualTime = renderStats?.rawClock ? mediaTime : smoothTime;
   highway.render(visualTime, running ? now : null);
   const cpuMs = performance.now() - before;
+  if (highway.resolution !== lastResolution) {
+    lastResolution = highway.resolution;
+    const canvas = highway.renderer.domElement;
+    resolutionText = `${canvas.width} × ${canvas.height} · ${Math.round(highway.renderer.getPixelRatio() / highway.deviceRatio * 100)}%${highway.resolution?.limited ? ' · GPU limit' : ''}`;
+    $('render-resolution-size').textContent = resolutionText;
+  }
   if (renderStats) {
     const stats = renderStats;
     if (running) stats.trace.record(now, before, mediaTime, visualTime, cpuMs, highway.renderer.info.render.calls, audio.playbackRate);
     else stats.trace.previous = null;
     if (now - stats.since >= 1000 || !running) {
       const summary = stats.trace.summary(before);
-      const canvas = highway.renderer.domElement;
       stats.element.textContent = [
         `${summary.callbackHz.toFixed(0)} callbacks/s · raw motion ${summary.rawMotionHz.toFixed(0)}/s · ${stats.rawClock ? 'RAW' : 'SMOOTH'} clock`,
         `Frame p95 ${summary.frameMs.p95.toFixed(1)} · p99 ${summary.frameMs.p99.toFixed(1)} · max ${summary.frameMs.max.toFixed(1)} ms`,
@@ -308,7 +324,7 @@ function drawFrame(now) {
         `Visual step error p95 ${summary.visualStepErrorMs.p95.toFixed(2)} ms · media offset ${((visualTime - mediaTime) * 1000).toFixed(1)} ms`,
         `CPU p95 ${summary.cpuMs.p95.toFixed(2)} ms · ${highway.renderer.info.render.calls} draw calls`,
         `Main thread: ${summary.longTasks} long tasks · ${summary.longFrames} long frames (2 s)`,
-        `${canvas.width} × ${canvas.height} · resolution ${Math.round(highway.quality.scale * 100)}%`
+        `${resolutionText} · ${highway.resolutionMode}`
       ].join('\n');
       stats.since = now;
     }

@@ -20,6 +20,8 @@ from pathlib import Path
 
 from Crypto.Cipher import AES
 
+from app_paths import DECODER
+
 
 class ImportFailure(ValueError):
     """A file is unsupported or cannot be read safely."""
@@ -351,7 +353,7 @@ def read_rocksmith(path: Path, destination: Path, arrangement: str | None = None
     wem = rocksmith_audio(archive, attrs)
     if wem is None:
         raise ImportFailure("No matching backing audio was found in this Rocksmith file.")
-    decoder = Path(__file__).parent / ".tools/vgmstream/vgmstream-cli.exe"
+    decoder = DECODER
     if not decoder.exists():
         raise ImportFailure("The Rocksmith audio decoder is missing. Launch with Start Player.cmd to set it up.")
     source = destination / "source.wem"

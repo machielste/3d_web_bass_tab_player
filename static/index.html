@@ -47,6 +47,7 @@
       </div>
       <p id="message" role="status" aria-live="polite" hidden></p>
       <div class="playback-utility">
+        <div class="rendering-setting"><label for="render-resolution">Rendering resolution</label><select id="render-resolution" aria-describedby="render-resolution-help"><option value="native">100% · Native</option><option value="1.5x">150% · Sharper</option><option value="2x">200% · Supersampling</option><option value="performance">Performance · Adaptive</option></select><output id="render-resolution-size" for="render-resolution"></output><p id="render-resolution-help">Follows your display. 200% renders 4× the pixels.</p></div>
         <label class="volume"><span>Volume</span><output id="volume-level" for="volume">70%</output><input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Volume"></label>
         <button id="fullscreen" type="button" aria-keyshortcuts="F"><span aria-hidden="true">⛶</span><span id="fullscreen-label">Fullscreen</span><kbd aria-hidden="true">F</kbd></button>
         <details id="player-more" class="player-more"><summary>More <span aria-hidden="true">···</span></summary><div><button id="player-open" class="text-button" type="button">Open song…</button><p id="song-source"></p><p><kbd>Space</kbd> Play / pause</p></div></details>

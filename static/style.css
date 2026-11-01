@@ -156,6 +156,10 @@ input:disabled { cursor: default; opacity: .3; }
 #message { font-size: 12px; line-height: 1.6; margin: 16px 0 0; color: #aebcc8; overflow-wrap: anywhere; }
 #message.error { color: #ffaaa7; }
 .playback-utility { margin-top: auto; padding-top: 28px; }
+.rendering-setting { display: grid; grid-column: 1 / -1; gap: 7px; margin-bottom: 20px; color: #7897a7; font-size: 11px; }
+.rendering-setting select { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid #293e49; border-radius: 5px; background: #101a24; color: #c3d3dc; font-size: 11px; }
+.rendering-setting output { color: #a0b5c0; font-variant-numeric: tabular-nums; }
+.rendering-setting p { margin: 0; color: #7897a7; font-size: 10px; line-height: 1.5; }
 .volume { display: grid; grid-template-columns: 1fr auto; gap: 8px; color: #7897a7; font-size: 11px; }
 .volume output { color: #a0b5c0; font-variant-numeric: tabular-nums; }
 .volume input { grid-column: 1 / -1; min-width: 0; }

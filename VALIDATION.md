@@ -293,3 +293,55 @@ including song URLs without a `perf` parameter. Save timing report remains
 available throughout playback. Explicit `perf=0` disables the overlay and trace;
 that override is preserved across song and library navigation. This supersedes
 the earlier opt-in behavior documented above.
+
+## Display clarity and supersampling — 2026-11-01
+
+The earlier two-million-pixel cap meant a 4K stage was deliberately rendered
+below native resolution and stretched to fill the window. It could also lose
+more resolution after sustained late callbacks, even when those callbacks did
+not demonstrate GPU saturation. Native resolution is now the default. The
+previous cap and adaptive behavior apply only to Performance mode, selected
+explicitly from the playback sidebar. Fixed 100%, 150% and 200% modes follow
+the display's current device-pixel ratio and never react to frame timing.
+
+A resolution media query is re-armed after each density change. Together with
+container/window resizing, focus and visibility listeners, it invalidates a
+paused canvas when the display changes. The existing single animation callback
+coalesces redraw requests. No monitor-enumeration permission or idle polling is
+required. Supersampling is bounded by the GPU's reported buffer/texture/viewport
+dimensions; a constrained request is identified in the UI and exported report.
+
+Thirty-nine JavaScript and seventeen Python checks pass. New checks cover 4K
+native resolution, high and fractional density, fixed quality after adaptive
+scaling, supersampling, GPU limits, repeated density changes without a resize,
+and display-listener cleanup. Browser checks on Sleep On It confirmed a
+3632 × 2160 native canvas at a 3840 × 2160 viewport, 7264 × 4320 at 200%, and
+1833 × 1090 in Performance mode. Resizing and mode changes updated while paused.
+At 1440 × 900, 150% produced 1848 × 1350. Playback, seeking, fullscreen,
+430 × 900 portrait layout, saved settings across reload, and JSON export with
+resolution metadata were verified. No browser warnings or errors were recorded.
+The browser viewport override cannot reproduce a physical move between the
+user's monitor and TV; repeated density changes are covered by automated tests,
+and physical multi-monitor confirmation remains a manual check.
+
+## Portable Windows build — 2026-11-01
+
+Built the current working tree with PyInstaller 6.22.3 on Windows x64 using
+Python 3.12.14. Both the terminal build and the root `Build Portable.cmd`
+launcher succeeded; the launcher was invoked from an unrelated directory.
+The resulting `dist/TabPlayer-0.1.0-windows-x64.zip` is approximately 24.6 MiB.
+
+Every build checks the extracted ZIP in a path containing spaces, with a
+different working directory and a child-process PATH containing only Windows
+system tools. Checks covered the initially empty catalog, all browser assets
+and both Three.js modules, upload/import of a generated ToneLib song, WAV
+byte-range serving, folder scan, SQLite FTS search, preview decoding through
+the bundled vgmstream executable, prepared-chart reuse, and catalog/cache
+persistence after terminating and restarting the executable. The archive was
+checked for song archives and personal/development state before extraction;
+smoke-test fixtures and generated state are never added to the shared ZIP.
+The existing seventeen Python and thirty-nine JavaScript tests also pass.
+
+The packaged browser UI and native folder picker were not manually exercised
+in this packaging pass. The smoke test covers HTTP assets and audio data;
+it does not assess browser rendering or audible playback on another computer.

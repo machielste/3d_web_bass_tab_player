@@ -3,6 +3,8 @@
 .data/
 .tools/
 node_modules/
+/build/
+/dist/
 __pycache__/
 *.pyc
 .idea/

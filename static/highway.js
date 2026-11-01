@@ -1,7 +1,8 @@
 import * as THREE from '/vendor/three.module.js';
 import { HIGHWAY_REFERENCE, CameraFollow, HandPositionTrack, NoteIndex, firstBeatAt, highwayTiming, noteDepth, noteOpacity, noteWorldX, stringLaneY } from './timeline.js';
 import { LabelAtlas, LabelBatch, uploadAttribute } from './label-batch.js';
-import { RenderQuality, renderPixelRatio } from './render-loop.js';
+import { RenderQuality } from './render-loop.js';
+import { DisplayWatcher, renderResolution, resolutionMode } from './render-resolution.js';
 const ROAD_SEGMENTS = 96;
 const COLORS = ['#f87989', '#f4ca6a', '#66b7f1', '#ed9b61'];
 const FIVE_COLORS = ['#b297ed', ...COLORS];
@@ -27,8 +28,12 @@ export class Highway {
     this.container = container;
     this.invalidate = invalidate;
     this.quality = new RenderQuality();
+    this.resolutionMode = 'native';
     this.resizePending = true;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    const gl = this.renderer.getContext(), viewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+    const maxBuffer = Math.min(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE), this.renderer.capabilities.maxTextureSize);
+    this.resolutionLimits = { width: Math.min(maxBuffer, viewport[0]), height: Math.min(maxBuffer, viewport[1]) };
     this.renderer.setClearColor(0x0b1018, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.domElement.setAttribute('aria-label', 'Perspective bass tablature: lowest string at the top; notes fade in beyond a finite four-fret highway.');
@@ -52,8 +57,7 @@ export class Highway {
     this.color = new THREE.Color();
     this.projected = new THREE.Vector3();
     this.setSong({ notes: [], beats: [], strings: ['E', 'A', 'D', 'G'] });
-    this.observer = new ResizeObserver(() => this.resize());
-    this.observer.observe(container);
+    this.displayWatcher = new DisplayWatcher(container, () => this.resize());
     this.resize();
   }
 
@@ -171,6 +175,12 @@ export class Highway {
     }
   }
 
+  setResolution(mode) {
+    this.resolutionMode = resolutionMode(mode);
+    this.quality.scale = 1;
+    this.resize();
+  }
+
   resize() {
     this.resizePending = true;
     this.quality.reset();
@@ -184,7 +194,8 @@ export class Highway {
     if (!width || !height) return;
     this.resizePending = false;
     this.deviceRatio = deviceRatio;
-    const ratio = renderPixelRatio(width, height, deviceRatio, this.quality.scale);
+    this.resolution = renderResolution(width, height, deviceRatio, this.resolutionMode, this.quality.scale, this.resolutionLimits);
+    const { ratio } = this.resolution;
     if (width === this.width && height === this.height && ratio === this.renderer.getPixelRatio()) return;
     this.width = width; this.height = height;
     this.renderer.setDrawingBufferSize(width, height, ratio);
@@ -230,7 +241,7 @@ export class Highway {
   }
 
   render(time, frameTime = null) {
-    if (frameTime === null) this.quality.reset();
+    if (frameTime === null || this.resolutionMode !== 'performance') this.quality.reset();
     else if (this.quality.sample(frameTime)) this.resizePending = true;
     this.applyResize();
     this.lastTime = time;
