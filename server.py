@@ -243,7 +243,10 @@ class Handler(BaseHTTPRequestHandler):
             file = ROOT / "node_modules/three/build" / path.rsplit("/", 1)[-1]
         else:
             static = {"/": "index.html", "/app.js": "app.js", "/highway.js": "highway.js",
-                      "/timeline.js": "timeline.js", "/style.css": "style.css", "/library.js": "library.js", "/virtual-list.js": "virtual-list.js"}
+                      "/timeline.js": "timeline.js", "/style.css": "style.css", "/library.js": "library.js", "/virtual-list.js": "virtual-list.js",
+                      "/render-loop.js": "render-loop.js", "/label-batch.js": "label-batch.js",
+                      "/playback-clock.js": "playback-clock.js", "/frame-diagnostics.js": "frame-diagnostics.js",
+                      "/benchmark.html": "benchmark.html", "/benchmark.js": "benchmark.js"}
             if path not in static:
                 return self.send_error(404)
             file = ROOT / "static" / static[path]

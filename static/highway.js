@@ -1,5 +1,7 @@
 import * as THREE from '/vendor/three.module.js';
-import { HIGHWAY_REFERENCE, CameraFollow, HandPositionTrack, NoteIndex, highwayTiming, noteDepth, noteOpacity, noteWorldX, stringLaneY } from './timeline.js';
+import { HIGHWAY_REFERENCE, CameraFollow, HandPositionTrack, NoteIndex, firstBeatAt, highwayTiming, noteDepth, noteOpacity, noteWorldX, stringLaneY } from './timeline.js';
+import { LabelAtlas, LabelBatch, uploadAttribute } from './label-batch.js';
+import { RenderQuality, renderPixelRatio } from './render-loop.js';
 const ROAD_SEGMENTS = 96;
 const COLORS = ['#f87989', '#f4ca6a', '#66b7f1', '#ed9b61'];
 const FIVE_COLORS = ['#b297ed', ...COLORS];
@@ -21,10 +23,12 @@ function fadingMaterial(timing, options = {}) {
 }
 
 export class Highway {
-  constructor(container) {
+  constructor(container, invalidate = () => {}) {
     this.container = container;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+    this.invalidate = invalidate;
+    this.quality = new RenderQuality();
+    this.resizePending = true;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     this.renderer.setClearColor(0x0b1018, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.domElement.setAttribute('aria-label', 'Perspective bass tablature: lowest string at the top; notes fade in beyond a finite four-fret highway.');
@@ -39,42 +43,18 @@ export class Highway {
     this.board = new THREE.Group();
     this.road = new THREE.Group();
     this.scene.add(this.board, this.road);
-    this.labels = [];
-    this.materials = new Map();
+    this.visibleNotes = [];
     this.box = new THREE.BoxGeometry(1, 1, 1);
     this.matrix = new THREE.Matrix4();
     this.rotation = new THREE.Quaternion();
     this.position = new THREE.Vector3();
     this.scale = new THREE.Vector3();
     this.color = new THREE.Color();
+    this.projected = new THREE.Vector3();
     this.setSong({ notes: [], beats: [], strings: ['E', 'A', 'D', 'G'] });
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(container);
     this.resize();
-  }
-
-  labelMaterial(text) {
-    if (!this.materials.has(text)) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 128; canvas.height = 96;
-      const context = canvas.getContext('2d');
-      context.font = '600 58px "Segoe UI", sans-serif';
-      context.textAlign = 'center'; context.textBaseline = 'middle';
-      context.lineWidth = 7; context.strokeStyle = '#15212a';
-      context.strokeText(text, 64, 49);
-      context.fillStyle = '#f4f9fc'; context.fillText(text, 64, 49);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      this.materials.set(text, new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, fog: false }));
-    }
-    return this.materials.get(text);
-  }
-
-  sprite(text, x, y, z, width = .45, height = .34) {
-    const sprite = new THREE.Sprite(this.labelMaterial(text));
-    sprite.position.set(x, y, z); sprite.scale.set(width, height, 1);
-    this.board.add(sprite);
-    return sprite;
   }
 
   clearGroup(group) {
@@ -86,6 +66,8 @@ export class Highway {
   }
 
   setSong(chart) {
+    this.boardLabels?.dispose();
+    this.atlas?.dispose();
     this.clearGroup(this.board); this.clearGroup(this.road);
     this.chart = chart;
     this.index = new NoteIndex(chart.notes);
@@ -95,22 +77,22 @@ export class Highway {
     this.lastTime = null;
     this.colors = chart.strings.length === 5 ? FIVE_COLORS : COLORS;
     this.maxFret = Math.max(24, chart.notes.reduce((maximum, n) => Math.max(maximum, n.fret), 0));
+    this.fretText = Array.from({ length: this.maxFret + 1 }, (_, fret) => String(fret));
+    this.atlas = new LabelAtlas([...this.fretText, ...chart.strings]);
+    this.boardLabels = new LabelBatch(this.atlas, this.maxFret + 1 + chart.strings.length);
+    this.board.add(this.boardLabels.mesh);
     const top = stringLaneY(0, chart.strings.length);
     const vertices = [], colors = [];
     const line = (a, b, color) => {
       vertices.push(...a, ...b);
       const c = new THREE.Color(color); colors.push(c.r, c.g, c.b, c.r, c.g, c.b);
     };
-    this.stringLabels = chart.strings.map((name, i) => {
+    chart.strings.forEach((name, i) => {
       const y = stringLaneY(i, chart.strings.length);
       line([-5, y, 0], [this.maxFret + 5, y, 0], this.colors[i]);
-      return this.sprite(name, -1, y, .06, .37, .28);
     });
-    this.fretLabels = [];
     for (let fret = 0; fret <= this.maxFret; fret++) {
       line([fret - .5, -.08, 0], [fret - .5, top + .12, 0], '#324553');
-      const label = this.sprite(String(fret), fret, -.13, .06, .43, .28);
-      this.fretLabels.push(label);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -157,7 +139,10 @@ export class Highway {
     const rails = new THREE.LineSegments(railGeometry, new THREE.LineBasicMaterial({ color: '#4ab8e5', transparent: true, opacity: .8 }));
     rails.frustumCulled = false;
     this.road.add(rails);
-    this.setCapacity(128);
+    // Allocate the peak visible window once, so dense passages never grow GPU
+    // buffers or create materials in the animation callback.
+    this.setCapacity(Math.max(128, 2 ** Math.ceil(Math.log2(this.index.maximumVisible(this.timing.spawnSeconds) || 1))));
+    this.quality.reset();
     this.resize();
   }
 
@@ -168,28 +153,44 @@ export class Highway {
         if (mesh.geometry !== this.box) mesh.geometry.dispose();
       }
     }
-    for (const label of this.labels) { this.scene.remove(label); label.material.dispose(); }
-    this.labels = [];
+    this.noteLabels?.dispose();
     this.capacity = capacity;
     this.heads = new THREE.InstancedMesh(this.box, fadingMaterial(this.timing), capacity);
     this.tails = new THREE.InstancedMesh(this.box, fadingMaterial(this.timing, { opacity: .42, depthWrite: false }), capacity);
     this.beatMesh = new THREE.InstancedMesh(this.box, new THREE.MeshBasicMaterial({ transparent: true, opacity: .4, depthWrite: false }), 256);
+    this.noteLabels = new LabelBatch(this.atlas, capacity);
+    this.noteLabels.mesh.renderOrder = 3;
+    this.scene.add(this.noteLabels.mesh);
     this.tails.renderOrder = 1; this.heads.renderOrder = 2;
     for (const mesh of [this.heads, this.tails, this.beatMesh]) {
       mesh.count = 0; mesh.frustumCulled = false;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.setColorAt(0, this.color.set('#ffffff'));
+      mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
       this.scene.add(mesh);
     }
   }
 
   resize() {
+    this.resizePending = true;
+    this.quality.reset();
+    this.invalidate();
+  }
+
+  applyResize() {
+    const deviceRatio = globalThis.devicePixelRatio || 1;
+    if (!this.resizePending && this.deviceRatio === deviceRatio) return;
     const width = this.container.clientWidth, height = this.container.clientHeight;
     if (!width || !height) return;
-    this.renderer.setSize(width, height, false);
+    this.resizePending = false;
+    this.deviceRatio = deviceRatio;
+    const ratio = renderPixelRatio(width, height, deviceRatio, this.quality.scale);
+    if (width === this.width && height === this.height && ratio === this.renderer.getPixelRatio()) return;
+    this.width = width; this.height = height;
+    this.renderer.setDrawingBufferSize(width, height, ratio);
     this.renderer.setViewport(0, 32, width, Math.max(1, height - 32));
     this.camera.aspect = width / Math.max(1, height - 32);
     this.camera.updateProjectionMatrix();
-    this.render(this.lastTime ?? 0);
   }
 
   instance(mesh, index, x, y, z, width, height, depth, color) {
@@ -228,22 +229,29 @@ export class Highway {
     this.floorAttribute.needsUpdate = this.railAttribute.needsUpdate = true;
   }
 
-  render(time) {
+  render(time, frameTime = null) {
+    if (frameTime === null) this.quality.reset();
+    else if (this.quality.sample(frameTime)) this.resizePending = true;
+    this.applyResize();
     this.lastTime = time;
     const { spawnSeconds, spacing, depth } = this.timing;
-    const visible = this.index.visible(time, spawnSeconds);
-    if (visible.length > this.capacity) this.setCapacity(2 ** Math.ceil(Math.log2(visible.length)));
+    const visible = this.index.visible(time, spawnSeconds, this.visibleNotes);
     const cameraStart = this.cameraFollow.update(time, this.handTrack.startAt(time + .18));
     this.camera.position.copy(this.referencePosition); this.camera.position.x += cameraStart;
     this.camera.updateMatrixWorld();
     this.updateRoad(time);
-    const viewDepth = z => -new THREE.Vector3(cameraStart + 2, 0, -z).applyMatrix4(this.camera.matrixWorldInverse).z;
-    this.scene.fog.near = viewDepth(depth * .76); this.scene.fog.far = viewDepth(depth);
-    this.stringLabels.forEach(label => { label.position.x = cameraStart - 2.5; });
-    this.fretLabels.forEach((label, fret) => {
-      const projected = label.position.clone().project(this.camera);
-      label.visible = Math.abs(fret - cameraStart - 2) < 6 && Math.abs(projected.x) < .98 && projected.y > -.98;
-    });
+    this.scene.fog.near = -this.projected.set(cameraStart + 2, 0, -depth * .76).applyMatrix4(this.camera.matrixWorldInverse).z;
+    this.scene.fog.far = -this.projected.set(cameraStart + 2, 0, -depth).applyMatrix4(this.camera.matrixWorldInverse).z;
+    this.boardLabels.reset(); this.noteLabels.reset();
+    for (let i = 0; i < this.chart.strings.length; i++) {
+      this.boardLabels.add(this.chart.strings[i], cameraStart - 2.5, stringLaneY(i, this.chart.strings.length), .06, .37, .28);
+    }
+    for (let fret = Math.max(0, Math.ceil(cameraStart - 4)); fret <= Math.min(this.maxFret, cameraStart + 8); fret++) {
+      const projected = this.projected.set(fret, -.13, .06).project(this.camera);
+      if (Math.abs(fret - cameraStart - 2) < 6 && Math.abs(projected.x) < .98 && projected.y > -.98) {
+        this.boardLabels.add(this.fretText[fret], fret, -.13, .06, .43, .28);
+      }
+    }
     let headCount = 0, tailCount = 0;
     for (let i = visible.length - 1; i >= 0; i--) {
       const note = visible[i];
@@ -255,34 +263,26 @@ export class Highway {
       const color = this.colors[note.string], alpha = noteOpacity(-z, depth);
       const active = note.time <= time && note.end >= time;
       this.instance(this.heads, headCount, x, y, z, open ? 4 : .44, open ? .09 : active ? .29 : .24, .12, active ? '#e9fff6' : color);
-      if (!this.labels[headCount]) {
-        const sprite = new THREE.Sprite(this.labelMaterial(String(note.fret)).clone());
-        sprite.scale.set(.5, .36, 1); sprite.renderOrder = 3;
-        this.scene.add(sprite); this.labels[headCount] = sprite;
-      }
-      const label = this.labels[headCount];
-      label.material.map = this.labelMaterial(String(note.fret)).map;
-      label.material.opacity = alpha;
-      label.position.set(x, y, z + .13); label.visible = alpha > .002;
+      if (alpha > .002) this.noteLabels.add(this.fretText[note.fret], x, y, z + .13, .5, .36, alpha);
       if (note.end - Math.max(time, note.time) > .09) {
         this.instance(this.tails, tailCount++, x, y, (z + tailZ) / 2, open ? 3.9 : .12, .045,
           Math.max(.01, z - tailZ), color);
       }
       headCount++;
     }
-    for (let i = headCount; i < this.labels.length; i++) this.labels[i].visible = false;
+    this.boardLabels.commit(); this.noteLabels.commit();
     this.heads.count = headCount; this.tails.count = tailCount;
     let beatCount = 0;
-    for (const beat of this.chart.beats) {
-      if (beat.time < time) continue;
+    for (let i = firstBeatAt(this.chart.beats, time); i < this.chart.beats.length; i++) {
+      const beat = this.chart.beats[i];
       if (beat.time > time + this.timing.previewSeconds || beatCount >= 256) break;
       this.instance(this.beatMesh, beatCount++, this.handTrack.startAt(beat.time) + 2, -.005, noteDepth(beat.time, time, spacing), 4, .015,
         beat.bar ? .08 : .025, beat.bar ? '#6d9cad' : '#335a70');
     }
     this.beatMesh.count = beatCount;
     for (const mesh of [this.heads, this.tails, this.beatMesh]) {
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      uploadAttribute(mesh.instanceMatrix, mesh.count);
+      uploadAttribute(mesh.instanceColor, mesh.count);
     }
     this.renderer.render(this.scene, this.camera);
   }

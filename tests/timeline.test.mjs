@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CameraFollow, HandPositionTrack, NoteIndex, highwayTiming, noteDepth, noteOpacity, noteWorldX, stringLaneY } from '../static/timeline.js';
+import { CameraFollow, HandPositionTrack, NoteIndex, firstBeatAt, highwayTiming, noteDepth, noteOpacity, noteWorldX, stringLaneY } from '../static/timeline.js';
 
 test('seeking into a sustain keeps its note visible', () => {
   const long = { time: 0, end: 20 };
@@ -16,6 +16,37 @@ test('note positions are derived from the audio clock after seeks', () => {
   assert.equal(noteDepth(12, 10), -16);
   assert.equal(noteDepth(12, 12), 0);
   assert.equal(noteDepth(12, 5), -56);
+});
+
+test('visible note storage is reused and peak capacity includes overlapping sustains after seeks', () => {
+  const notes = Array.from({ length: 2000 }, (_, i) => ({ time: i / 4, end: i / 4 + (i % 10 === 0 ? 60 : .25) }));
+  const index = new NoteIndex(notes), result = [];
+  let peak = 0;
+  for (const note of notes) {
+    const time = note.time - 4;
+    const expected = notes.filter(note => note.time <= time + 4 && note.end >= time - .1);
+    assert.equal(index.visible(time, 4, result), result);
+    assert.deepEqual(result, expected);
+    peak = Math.max(peak, expected.length);
+  }
+  assert.equal(index.maximumVisible(4), peak);
+  index.visible(1000, 4, result);
+  assert.deepEqual(result, []);
+  assert.equal(new NoteIndex([]).maximumVisible(4), 0);
+});
+
+test('beat lookup handles seeks and exact boundaries without scanning elapsed beats', () => {
+  let reads = 0;
+  const beats = new Proxy(Array.from({ length: 100000 }, (_, i) => ({ time: i / 2 })), {
+    get(target, key) { if (/^\d+$/.test(String(key))) reads++; return target[key]; }
+  });
+  assert.equal(firstBeatAt(beats, 49000.1), 98001);
+  assert.ok(reads < 20);
+  assert.equal(firstBeatAt(beats, 49000), 98000);
+  assert.equal(firstBeatAt(beats, 0), 0);
+  assert.equal(firstBeatAt(beats, -10), 0);
+  assert.equal(firstBeatAt(beats, 100000), beats.length);
+  assert.equal(firstBeatAt([], 0), 0);
 });
 
 test('six beats at 111 BPM give a shorter preview and a faster approach', () => {

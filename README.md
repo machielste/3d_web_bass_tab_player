@@ -116,6 +116,43 @@ preview priority/cancellation and virtual-list bounds. The benchmark measures
 local catalog API latency with the server running. Real-file
 and browser checks are documented in `VALIDATION.md`.
 
+The performance overlay is enabled by default while the intermittent stutter is
+being investigated, so **Save timing report** is always ready during playback.
+Use `?perf=0` (or `&perf=0` on a song URL) to disable it for a session; this choice
+is preserved while switching between songs and the library.
+The overlay counts animation callbacks, not frames
+actually presented by the display. It shows p95/p99/maximum frame intervals,
+late frames relative to the observed refresh cadence, repeated media times,
+clock-step jitter, CPU submission, and drawing-buffer size. A high callback
+rate can coexist with long gaps or repeated note positions. Diagnostics stay
+local. Open `/benchmark.html` for a repeatable dense
+five-string workload. Run it with the tab visible, then repeat while resizing
+or using another browser window. Compare frame intervals and CPU time as well
+as FPS; CPU submission does not measure GPU execution.
+
+The renderer batches labels into an atlas, allocates visible-note capacity at
+song load, and redraws paused scenes only when needed. Resize requests share the
+playback animation callback. The canvas is limited to two million pixels and
+1.75 device pixels per CSS pixel. Sustained missed frames reduce its resolution;
+stable playback restores it gradually. This trades some sharpness for GPU
+headroom without changing camera geometry or audio timing. Browser scheduling,
+GPU contention and power-saving policies can still interrupt frame delivery.
+
+Highway motion interpolates the media clock along the animation-frame timeline
+and gently reconciles small timing errors. It resets on seeks, pause, buffering,
+song changes and visibility changes, and bounds the visual estimate to within
+40 ms of the observed media time at normal speed. Audio playback is unchanged.
+This removes clock-step jitter; it cannot replace frames the browser does not
+deliver or present.
+
+While diagnosing a stuttering song, toggle **Raw audio clock** in the overlay
+to compare the old timing with smoothed timing during the same playback. The
+moving dot is an independent CSS timing reference. **Save timing report** saves
+the most recent 4,096 frame samples, transport/focus events, and available
+long-task/long-animation-frame script attribution as local JSON. Nothing is
+uploaded. Save the report while the problem is occurring. Browser performance
+entries and callback counts do not directly measure physical presentation.
+
 ## Offline perspective calibration
 
 The image-analysis packages are optional and never imported during playback:

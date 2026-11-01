@@ -19,18 +19,36 @@ export class NoteIndex {
     let maximum = -Infinity;
     this.ends = notes.map(note => (maximum = Math.max(maximum, note.end)));
   }
-  visible(time, lookahead = 7) {
+  maximumVisible(lookahead) {
+    const ends = this.notes.map(note => note.end + .1).sort((a, b) => a - b);
+    let expired = 0, peak = 0;
+    for (let i = 0; i < this.notes.length; i++) {
+      while (expired < ends.length && ends[expired] < this.notes[i].time - lookahead) expired++;
+      peak = Math.max(peak, i + 1 - expired);
+    }
+    return peak;
+  }
+  visible(time, lookahead = 7, result = []) {
     let lo = 0, hi = this.notes.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
       if (this.ends[mid] < time - 0.1) lo = mid + 1; else hi = mid;
     }
-    const result = [];
+    result.length = 0;
     for (let i = lo; i < this.notes.length && this.notes[i].time <= time + lookahead; i++) {
       if (this.notes[i].end >= time - 0.1) result.push(this.notes[i]);
     }
     return result;
   }
+}
+
+export function firstBeatAt(beats, time) {
+  let lo = 0, hi = beats.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (beats[mid].time < time) lo = mid + 1; else hi = mid;
+  }
+  return lo;
 }
 
 export function noteDepth(noteTime, audioTime, spacing = 8) {

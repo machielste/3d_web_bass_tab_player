@@ -182,3 +182,114 @@ Sleep On It through More → Open song, and returning to the library and player.
 The sidebar correctly displayed EADG and BEADG. No browser console errors or
 warnings were observed. Seventeen Python checks and thirteen JavaScript checks
 pass; JavaScript syntax and Git whitespace checks also pass.
+
+## Browser rendering performance — 2026-10-31
+
+Seventeen Python checks and twenty-three JavaScript checks pass. Added coverage
+for coalescing resize/seek/playback requests, idle and hidden-view scheduling,
+resume timestamps, a bounded drawing buffer, adaptive-resolution hysteresis,
+reusable label buffers and fades, peak visible-note capacity including sustains,
+and logarithmic beat lookup after long seeks. Camera calibration and audio-time
+alignment checks still pass.
+
+The Windows in-app Chromium browser ran a synthetic five-string chart with
+12,000 notes, twenty onsets per second, and overlapping sustains. Each run warms
+for one second and samples for ten seconds at a 1225 × 720 CSS/pixel viewport.
+The baseline and first optimized run used the same workload and dimensions:
+
+| Measurement | Baseline | Batched renderer |
+| --- | ---: | ---: |
+| Median draw calls per frame | 97 | 9 |
+| Maximum draw calls per frame | 99 | 9 |
+| Textures resident | 19 | 1 |
+| Median CPU submission | 0.30 ms | 0.20 ms |
+| 95th-percentile CPU submission | 0.80 ms | 0.50 ms |
+| 95th-percentile frame interval | 2.90 ms | 2.90 ms |
+| Frames longer than 25 ms | 8 | 12 |
+
+This browser delivered callbacks above normal display refresh rates. These are
+local workload measurements, not a display-FPS guarantee or proof that the
+user's intermittent stutter is eliminated. GPU execution time was not measured;
+the long-frame counts did not improve in this pair of short runs. The measured
+gain is fewer draw calls and less CPU submission work. Browser/OS scheduling,
+GPU contention, and power policies remain possible causes of interruptions.
+One final optimized repeat recorded 0.10 ms median / 0.20 ms p95 CPU submission,
+nine draw calls, and no frames over 25 ms. This variability is another reason
+not to treat a single short run as an intermittent-stutter diagnosis.
+
+Browser checks covered four-string Sleep On It playback and its shift near
+2:37; five-string Wonderland playback and seeking near 9:25; pause, fullscreen
+entry/exit, library/player switching, and portrait resizing at 430 × 900. A
+3840 × 2160 viewport gave a 3632 × 2160 stage with an 1833 × 1090 drawing buffer
+(1,997,970 pixels), keeping the projection and CSS size while limiting GPU work.
+The default viewport was restored. A fresh tab reported no console warnings or
+errors after playback, seeking, fullscreen and view switching.
+
+`/benchmark.html` repeats the dense workload and reports frame intervals, CPU
+submission time, draw calls, resolution and resource counts. Add `&perf=1` to
+a song URL, or start at `/?perf=1`, for a local live diagnostic overlay during
+ordinary playback. Diagnostics are disabled by default. Resolution drops only
+after sustained missed frames, recovers gradually after stable playback, and
+does not infer sustained load from an isolated long suspension. No browser or
+OS settings were changed.
+
+## Frame pacing investigation — 2026-10-31
+
+The follow-up report describes occasional visually poor song starts while audio
+remains smooth and the counter still reads roughly 280 FPS. The old counter
+measured animation callbacks, not display presentation, and its fixed 25 ms
+threshold missed smaller gaps on a high-refresh display.
+
+Replaced that overlay with two-second frame-interval distributions (p95, p99,
+maximum), a cadence-relative late-frame threshold, callback versus media-update
+rates, repeated media times, media/display clock-step errors, callback dispatch
+lag, CPU submission, and optional browser long-task/long-animation-frame
+attribution. Focus and transport events are retained. The local export holds
+at most 4,096 samples and 64 entries per event/attribution history. The CSS
+reference dot and live Raw audio clock toggle allow comparisons during a bad
+playback state without reopening the song.
+
+One saved test-browser trace measured 275.99 callbacks/s while recording
+22.1 ms p99 and 103.4 ms maximum frame gaps. CPU submission was 0.50 ms p95,
+and the media time advanced on every sampled callback. Four browser long tasks
+and four long animation frames overlapped the summary window; the recorded
+long-frame entries had no attributed page scripts. This supports investigating
+frame delivery separately from renderer CPU work. It does not establish a
+browser priority bug: automation/isolated-world work can affect these tests and
+is not necessarily attributed, and physical display presentation is not exposed
+by these measurements.
+
+The highway now uses an audio-anchored display-time clock instead of directly
+using each media-time sample as its position. Normal drift corrections are
+limited to 2% of visual speed; a 40 ms bound at normal playback speed and resets
+on seeks, transport changes and suspension prevent runaway extrapolation.
+The backing audio and authored timestamps are unchanged. In that saved trace,
+media-step error was 0.147 ms p95 and visual-step error was 0.003 ms p95; this
+reduces timing wobble but cannot restore undelivered frames. The original
+one-in-five startup failure is not conclusively reproduced or resolved.
+
+Thirty-four JavaScript and seventeen Python checks pass. Added tests cover a
+250 Hz callback stream with only 25 Hz media updates, gaps below 25 ms at 360 Hz,
+20 ms quantization, uneven callback dispatch, bounded clock drift and history,
+pause/seek/source/rate changes, long suspensions and browser attribution. These
+synthetic timing cases validate the new behavior, not the cause of the reported
+intermittent browser issue. Real-song browser checks cover live raw/smooth
+switching, backward seeking, pause/resume, selecting a new song through the
+library, and local report export.
+
+The library switch from Sleep On It to five-string Wonderland also exposed
+media-clock repetition independent of frame gaps. The latter showed 360
+callbacks/s but approximately 320 distinct media-time updates/s, with 80
+repeated media samples over two seconds, no late frames, and 0.20 ms p95 CPU
+submission. Media-step error was 3.16 ms p95 while the smoothed visual-step
+error was 0.06 ms p95. A later window still showed approximately 323 updates/s
+and 73 repeats. This is a concrete clock-stepping case that interpolation
+addresses; it does not prove that it causes all of the reported random starts.
+
+## Default timing capture — 2026-11-01
+
+The performance overlay and bounded timing trace are now enabled by default,
+including song URLs without a `perf` parameter. Save timing report remains
+available throughout playback. Explicit `perf=0` disables the overlay and trace;
+that override is preserved across song and library navigation. This supersedes
+the earlier opt-in behavior documented above.

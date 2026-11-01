@@ -117,6 +117,14 @@ dialog::backdrop { background: #020911b8; backdrop-filter: blur(5px); }
 h1 { font-size: clamp(20px, 2.8vw, 32px); font-weight: 550; line-height: 1.25; margin: 0 0 8px; letter-spacing: -.6px; overflow-wrap: anywhere; }
 #stage { position: relative; grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 70%, #12202b 0%, #0b1018 68%); }
 #stage canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.render-stats { position: absolute; top: 12px; left: 12px; z-index: 2; margin: 0; max-width: calc(100% - 24px); padding: 8px 10px; color: #dce9ef; background: #0b1018d9; font: 11px/1.6 monospace; }
+.render-stats pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.render-stats-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 8px; }
+.render-stats-controls label { display: flex; align-items: center; gap: 5px; }
+.render-stats-controls button { background: #1c303c; color: inherit; border: 1px solid #3a5765; border-radius: 3px; padding: 3px 6px; font: inherit; }
+.render-reference { width: 164px; height: 4px; margin: 9px 0 3px; background: #3a5765; }
+.render-reference i { display: block; width: 8px; height: 4px; background: #d3f7ef; animation: render-reference 1s linear infinite alternate; will-change: transform; }
+@keyframes render-reference { from { transform: translateX(0); } to { transform: translateX(156px); } }
 .empty { position: absolute; z-index: 1; top: 22%; left: 50%; transform: translateX(-50%); text-align: center; width: 90%; pointer-events: none; }
 .empty-line { display: block; width: 24px; height: 2px; margin: 0 auto 18px; background: #6fc7ba; }
 .empty p { color: #9babb8; font-size: 14px; margin: 0 0 10px; }
