@@ -99,6 +99,8 @@ def main():
             (ROOT / "scripts/pick_folder.ps1", "scripts"),
             (ROOT / "node_modules/three/build/three.module.js", "node_modules/three/build"),
             (ROOT / "node_modules/three/build/three.core.js", "node_modules/three/build"),
+            *[(ROOT / "node_modules/three/examples/jsm/lines" / name, "node_modules/three/examples/jsm/lines")
+              for name in ("LineSegments2.js", "LineSegmentsGeometry.js", "LineMaterial.js")],
             (ROOT / ".tools/vgmstream", ".tools/vgmstream"),
         ]
         for source, destination in assets:

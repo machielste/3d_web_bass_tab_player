@@ -242,11 +242,13 @@ class Handler(BaseHTTPRequestHandler):
             file = CACHE / match[1] / match[2]
         elif path in ("/vendor/three.module.js", "/vendor/three.core.js"):
             file = ROOT / "node_modules/three/build" / path.rsplit("/", 1)[-1]
+        elif path in ("/vendor/lines/LineSegments2.js", "/vendor/lines/LineSegmentsGeometry.js", "/vendor/lines/LineMaterial.js"):
+            file = ROOT / "node_modules/three/examples/jsm/lines" / path.rsplit("/", 1)[-1]
         else:
             static = {"/": "index.html", "/app.js": "app.js", "/highway.js": "highway.js",
                       "/timeline.js": "timeline.js", "/style.css": "style.css", "/library.js": "library.js", "/virtual-list.js": "virtual-list.js",
                       "/render-loop.js": "render-loop.js", "/label-batch.js": "label-batch.js",
-                      "/render-resolution.js": "render-resolution.js",
+                      "/render-resolution.js": "render-resolution.js", "/screen-lines.js": "screen-lines.js",
                       "/playback-clock.js": "playback-clock.js", "/frame-diagnostics.js": "frame-diagnostics.js",
                       "/benchmark.html": "benchmark.html", "/benchmark.js": "benchmark.js"}
             if path not in static:

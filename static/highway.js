@@ -3,6 +3,7 @@ import { HIGHWAY_REFERENCE, CameraFollow, HandPositionTrack, NoteIndex, firstBea
 import { LabelAtlas, LabelBatch, uploadAttribute } from './label-batch.js';
 import { RenderQuality } from './render-loop.js';
 import { DisplayWatcher, renderResolution, resolutionMode } from './render-resolution.js';
+import { ScreenLines } from './screen-lines.js';
 const ROAD_SEGMENTS = 96;
 const COLORS = ['#f87989', '#f4ca6a', '#66b7f1', '#ed9b61'];
 const FIVE_COLORS = ['#b297ed', ...COLORS];
@@ -98,10 +99,7 @@ export class Highway {
     for (let fret = 0; fret <= this.maxFret; fret++) {
       line([fret - .5, -.08, 0], [fret - .5, top + .12, 0], '#324553');
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    this.board.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: .72, fog: false })));
+    this.board.add(new ScreenLines(vertices, { colors, linewidth: 1.25, opacity: .72, fog: false }));
     // Absolute fret lanes continue faintly on both sides of the hand corridor.
     // These do not move with the blue guide and give lateral camera travel a
     // visible, numbered neck to move along.
@@ -114,10 +112,8 @@ export class Highway {
       const z = -this.timing.depth * step / 6;
       context.push(-.5, .003, z, this.maxFret + .5, .003, z);
     }
-    const contextGeometry = new THREE.BufferGeometry();
-    contextGeometry.setAttribute('position', new THREE.Float32BufferAttribute(context, 3));
-    const contextLines = new THREE.LineSegments(contextGeometry,
-      new THREE.LineBasicMaterial({ color: '#4d7891', transparent: true, opacity: .28, depthWrite: false }));
+    const contextLines = new ScreenLines(context,
+      { linewidth: 1, color: '#4d7891', opacity: .28, depthWrite: false });
     contextLines.renderOrder = 1;
     this.board.add(contextLines);
     const floorGeometry = new THREE.BufferGeometry();
@@ -137,12 +133,9 @@ export class Highway {
     floor.frustumCulled = false;
     this.road.add(floor);
     this.railPositions = new Float32Array(2 * ROAD_SEGMENTS * 6);
-    const railGeometry = new THREE.BufferGeometry();
-    this.railAttribute = new THREE.BufferAttribute(this.railPositions, 3).setUsage(THREE.DynamicDrawUsage);
-    railGeometry.setAttribute('position', this.railAttribute);
-    const rails = new THREE.LineSegments(railGeometry, new THREE.LineBasicMaterial({ color: '#4ab8e5', transparent: true, opacity: .8 }));
-    rails.frustumCulled = false;
-    this.road.add(rails);
+    this.rails = new ScreenLines(this.railPositions,
+      { dynamic: true, linewidth: 1.5, color: '#4ab8e5', opacity: .8 });
+    this.road.add(this.rails);
     // Allocate the peak visible window once, so dense passages never grow GPU
     // buffers or create materials in the animation callback.
     this.setCapacity(Math.max(128, 2 ** Math.ceil(Math.log2(this.index.maximumVisible(this.timing.spawnSeconds) || 1))));
@@ -237,7 +230,8 @@ export class Highway {
         this.railPositions[offset + 5] = this.floorPositions[(i + 1) * 6 + 2];
       }
     }
-    this.floorAttribute.needsUpdate = this.railAttribute.needsUpdate = true;
+    this.floorAttribute.needsUpdate = true;
+    this.rails.commit();
   }
 
   render(time, frameTime = null) {

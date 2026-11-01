@@ -176,6 +176,15 @@ times as many pixels, so it requires more GPU work. The setting is saved in this
 browser. Actual buffer dimensions and any GPU size limit appear below it and in
 the timing report. Fixed modes never reduce resolution in response to stutter.
 
+Strings, fret markers, background fret lanes and highway rails are drawn as
+triangle-based line meshes. Their widths are defined in CSS pixels, so increasing
+rendering resolution adds samples while preserving their apparent thickness.
+The line centres still follow the 3D perspective and hand shifts. Front-board
+lines use 1.25 px, background lanes 1 px and blue highway rails 1.5 px; colour,
+opacity and distance fog retain their existing roles. Moving rails reuse their
+position buffer during playback. These are camera-facing ribbons with controlled
+screen width, rather than solid tubes with a fixed thickness in world units.
+
 **Performance · Adaptive** retains the earlier two-million-pixel / 1.75 density
 cap and can reduce resolution after sustained missed frames, restoring it
 gradually during stable playback. Choose it when GPU headroom matters more than

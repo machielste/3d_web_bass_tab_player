@@ -345,3 +345,30 @@ The existing seventeen Python and thirty-nine JavaScript tests also pass.
 The packaged browser UI and native folder picker were not manually exercised
 in this packaging pass. The smoke test covers HTTP assets and audio data;
 it does not assess browser rendering or audible playback on another computer.
+
+## Screen-space line meshes — 2026-11-01
+
+Replaced native WebGL line primitives on the front board, background fret lanes
+and moving blue highway rails with Three.js LineSegments2 triangle meshes.
+Their screen-space widths are 1.25, 1 and 1.5 CSS pixels respectively. The scene
+keeps its existing line colours, opacity, fog, perspective and hand-position
+timeline. Moving rails retain their shared Float32Array/interleaved GPU buffer;
+only its contents are updated during playback. The three required Three.js
+addons are served locally and included in the portable build. Both HTML entry
+points resolve their bare `three` import to the existing local module.
+
+Forty-two JavaScript and seventeen Python tests pass. New checks cover apparent
+width across native/150%/200% sampling, high display densities and viewport
+changes; in-place updates of both rail endpoints; and line colour/depth settings.
+The rebuilt portable ZIP passed its isolated launch, asset, import, decoder,
+audio and persistence checks, including requests for all three line addons.
+
+Browser checks used the real four-string Sleep On It chart and the dense
+five-string benchmark. At a 2560 × 1440 viewport, the player reported drawing
+buffers of 2352 × 1440 (native), 3528 × 2160 (150%) and 4704 × 2880 (200%).
+Paused comparisons at 1:00 retained apparent line widths at native and 200%;
+playback, seeking and a return to the default viewport also worked. No browser
+warnings or shader errors were recorded. The dense native benchmark reported
+9 draw calls, 7 geometries, one texture, 0.20 ms p95 CPU submission, 2.9 ms p95
+callback intervals and no intervals over 25 ms during the measured ten seconds.
+These are callback/submission measurements, not GPU time or display scanout.

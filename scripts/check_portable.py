@@ -118,7 +118,7 @@ def check_portable(archive: Path, destination: Path, static_names: list[str]):
         require(status["total"] == 0 and not status["roots"], "The packaged library must start empty.")
         for name in static_names:
             require(request("/" if name == "index.html" else "/" + name), f"Empty browser asset: {name}")
-        for name in ("three.module.js", "three.core.js"):
+        for name in ("three.module.js", "three.core.js", "lines/LineSegments2.js", "lines/LineSegmentsGeometry.js", "lines/LineMaterial.js"):
             require(request("/vendor/" + name), f"Missing Three.js asset: {name}")
         chart = request("/api/open?name=portable.song", fixture.read_bytes(), {"Content-Type": "application/octet-stream"})
         require(chart["strings"] == ["E", "A", "D", "G"] and chart["notes"], "Portable song import failed.")
